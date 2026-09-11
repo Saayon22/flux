@@ -1,6 +1,6 @@
 # AGENTS.md
 
-## RepoRamp
+## flux
 
 Follow the `flux_PRD.md` and `flux_Tech_Stack.md` and `flux_Phase_Build_Plan.md`.
 

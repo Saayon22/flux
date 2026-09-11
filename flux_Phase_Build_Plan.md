@@ -1,4 +1,4 @@
-# RepoRamp — Phase-Wise Build Plan
+# flux — Phase-Wise Build Plan
 
 ## Phase 1 — Repository Ingestion
 - Accept GitHub repository URL

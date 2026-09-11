@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RepoRamp | Grounded Codebase Onboarding & Issue Solver",
+  title: "flux | Grounded Codebase Onboarding & Issue Solver",
   description:
     "Grounded repository understanding with AST dependency graphs, plain-English issue explanations, and autonomous agent handoffs.",
 };
