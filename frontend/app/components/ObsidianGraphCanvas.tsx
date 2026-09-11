@@ -50,17 +50,18 @@ interface SimEdge {
   pulsePhase: number;
 }
 
-// Akaru-Harmonized Palette (Warm Terracotta, Gold, Sky Azure, Pure White, Mint - Zero Purple)
+// Akaru-harmonized cluster palette with high contrast on warm canvas.
 const AKARU_CLUSTERS = [
-  { color: "#e49366", name: "Terracotta Primary" },
-  { color: "#ffffff", name: "Pure White" },
-  { color: "#f59e0b", name: "Warm Gold" },
-  { color: "#38bdf8", name: "Sky Azure" },
-  { color: "#10b981", name: "Mint Emerald" },
-  { color: "#fb7185", name: "Coral Rose" },
-  { color: "#9e9e9e", name: "Neutral Gray" },
+  { color: "#df7d4c", name: "Terracotta Primary" },
+  { color: "#2a2c2b", name: "Slate Charcoal" },
+  { color: "#d97706", name: "Warm Amber" },
+  { color: "#0284c7", name: "Sky Azure" },
+  { color: "#059669", name: "Mint Emerald" },
+  { color: "#e11d48", name: "Coral Rose" },
+  { color: "#6b7280", name: "Neutral Slate" },
 ];
 
+// Renders interactive canvas dependency network with energy pulses and inspector drawer.
 export default function ObsidianGraphCanvas({
   owner,
   repo,
@@ -94,23 +95,23 @@ export default function ObsidianGraphCanvas({
   const animFrameIdRef = useRef<number | null>(null);
   const tickCounterRef = useRef(0);
 
-  // Color helper
+  // Resolves color token for graph node by community cluster or programming language.
   const getNodeColor = useCallback((node: SimNode): string => {
     if (node.cluster !== undefined && node.cluster >= 0) {
       return AKARU_CLUSTERS[node.cluster % AKARU_CLUSTERS.length].color;
     }
     switch (node.language.toLowerCase()) {
       case "python":
-        return "#e49366";
+        return "#df7d4c";
       case "javascript":
       case "typescript":
-        return "#ffffff";
+        return "#2a2c2b";
       case "go":
-        return "#38bdf8";
+        return "#0284c7";
       case "rust":
-        return "#f59e0b";
+        return "#d97706";
       default:
-        return "#9e9e9e";
+        return "#6b7280";
     }
   }, []);
 
@@ -206,7 +207,7 @@ export default function ObsidianGraphCanvas({
     setHoveredNode(null);
   }, [graph]);
 
-  // Center on node helper
+  // Centers viewport on a specific node with smooth animation and zoom scale.
   const centerOnNode = useCallback((nodeId: string) => {
     const target = nodesRef.current.find((n) => n.id === nodeId);
     const canvas = canvasRef.current;
@@ -261,6 +262,7 @@ export default function ObsidianGraphCanvas({
       .slice(0, 8);
   }, [graph.nodes, searchQuery]);
 
+  // Adjusts pan and zoom scale to fit entire dependency network within canvas bounds.
   const handleZoomToFit = () => {
     const nodes = nodesRef.current;
     const canvas = canvasRef.current;
@@ -532,6 +534,7 @@ export default function ObsidianGraphCanvas({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Translates client screen pixel coordinates to virtual graph canvas coordinates.
   const screenToCanvas = (screenX: number, screenY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -541,6 +544,7 @@ export default function ObsidianGraphCanvas({
     return { x, y };
   };
 
+  // Identifies nearest graph node matching canvas coordinate within hit radius.
   const findNodeAt = (canvasX: number, canvasY: number): SimNode | null => {
     const nodes = nodesRef.current;
     for (let i = nodes.length - 1; i >= 0; i--) {
@@ -562,6 +566,7 @@ export default function ObsidianGraphCanvas({
     return null;
   };
 
+  // Handles mouse down event for node dragging or viewport panning.
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     const { x, y } = screenToCanvas(e.clientX, e.clientY);
@@ -579,6 +584,7 @@ export default function ObsidianGraphCanvas({
     }
   };
 
+  // Tracks cursor movement for viewport panning, node dragging, and tooltip positioning.
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const { x, y } = screenToCanvas(e.clientX, e.clientY);
 
@@ -608,6 +614,7 @@ export default function ObsidianGraphCanvas({
     }
   };
 
+  // Completes node dragging or viewport panning on mouse button release.
   const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const distMoved = Math.hypot(
       e.clientX - mouseDownPosRef.current.x,
@@ -630,12 +637,14 @@ export default function ObsidianGraphCanvas({
     setIsInteracting(false);
   };
 
+  // Adjusts viewport zoom scale on mouse wheel scrolling.
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.12 : 0.88;
     setZoom((prev) => Math.min(Math.max(prev * factor, 0.3), 3.5));
   };
 
+  // Dismisses node inspector drawer and resets focused node state.
   const handleCloseInspector = () => {
     setSelectedNode(null);
     if (onClearFocus) onClearFocus();
@@ -704,12 +713,13 @@ export default function ObsidianGraphCanvas({
           {availableClusters.length > 1 && (
             <select
               value={selectedClusterFilter}
+              aria-label="Filter modules by Louvain community cluster"
               onChange={(e) =>
                 setSelectedClusterFilter(
                   e.target.value === "all" ? "all" : parseInt(e.target.value, 10)
                 )
               }
-              className="px-3.5 py-1.5 bg-[#fffefa] border border-[rgba(23,24,23,0.14)] rounded-xl text-xs text-[#171817] focus:outline-none cursor-pointer hover:border-[#df7d4c] shadow-xs"
+              className="px-3.5 py-1.5 bg-[#fffefa] border border-[rgba(23,24,23,0.14)] rounded-xl text-xs text-[#171817] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c] cursor-pointer hover:border-[#df7d4c] shadow-xs"
             >
               <option value="all">All Clusters ({availableClusters.length})</option>
               {availableClusters.map((c) => (
@@ -723,8 +733,9 @@ export default function ObsidianGraphCanvas({
           {/* Min Degree Filter */}
           <button
             type="button"
+            aria-label="Filter modules by connection degree"
             onClick={() => setMinDegreeFilter((prev) => (prev === 0 ? 1 : prev === 1 ? 2 : 0))}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 shadow-xs ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c] ${
               minDegreeFilter > 0
                 ? "bg-[#df7d4c] text-[#fffdf8] border-[#df7d4c]"
                 : "bg-[#fffefa] text-[#171817] border-[rgba(23,24,23,0.14)] hover:bg-[rgba(23,24,23,0.04)]"
@@ -744,35 +755,39 @@ export default function ObsidianGraphCanvas({
           <div className="flex items-center bg-[#fffefa] text-[#171817] border border-[rgba(23,24,23,0.14)] rounded-xl overflow-hidden shadow-xs font-bold">
             <button
               type="button"
+              aria-label="Zoom in"
               onClick={() => setZoom((z) => Math.min(z * 1.2, 3.5))}
-              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer"
+              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c]"
               title="Zoom In"
             >
               <Plus className="w-4 h-4" />
             </button>
             <button
               type="button"
+              aria-label="Zoom out"
               onClick={() => setZoom((z) => Math.max(z * 0.8, 0.3))}
-              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer border-l border-[rgba(23,24,23,0.1)]"
+              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer border-l border-[rgba(23,24,23,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c]"
               title="Zoom Out"
             >
               <Minus className="w-4 h-4" />
             </button>
             <button
               type="button"
+              aria-label="Fit graph to viewport"
               onClick={handleZoomToFit}
-              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer border-l border-[rgba(23,24,23,0.1)]"
+              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer border-l border-[rgba(23,24,23,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c]"
               title="Fit to Screen"
             >
               <Maximize2 className="w-4 h-4" />
             </button>
             <button
               type="button"
+              aria-label="Reset viewport pan and zoom"
               onClick={() => {
                 setZoom(1);
                 setPan({ x: 0, y: 0 });
               }}
-              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer border-l border-[rgba(23,24,23,0.1)]"
+              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer border-l border-[rgba(23,24,23,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c]"
               title="Reset View"
             >
               <RotateCcw className="w-4 h-4" />

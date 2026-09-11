@@ -1,6 +1,5 @@
-"use client";
-
 // Drawer component for deep AST node inspection and source viewing.
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { GraphNode, GraphEdge, fetchFileContent, FileContentResponse } from "../lib/api";
@@ -71,6 +70,15 @@ export default function NodeInspectorDrawer({
     setCodeError(null);
   }, [node.id]);
 
+  // Listens for Escape key to close the inspector drawer.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   // Copies text to clipboard and shows transient confirmation.
   const copyToClipboard = (text: string, type: "path" | "code") => {
     navigator.clipboard.writeText(text);
@@ -103,13 +111,14 @@ export default function NodeInspectorDrawer({
             </h3>
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-[11px] font-code text-[#77756f] truncate max-w-xs" title={node.id}>
+            <p className="text-[11px] font-code text-[#6b6963] truncate max-w-xs" title={node.id}>
               {node.id}
             </p>
             <button
               type="button"
               onClick={() => copyToClipboard(node.id, "path")}
-              className="text-[rgba(23,24,23,0.5)] hover:text-[#df7d4c] transition-colors p-0.5 cursor-pointer"
+              aria-label="Copy file path to clipboard"
+              className="text-[rgba(23,24,23,0.5)] hover:text-[#df7d4c] transition-colors p-0.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c] rounded-xs"
               title="Copy file path"
             >
               {copiedPath ? <Check className="w-3.5 h-3.5 text-[#df7d4c]" /> : <Copy className="w-3.5 h-3.5" />}
@@ -120,7 +129,8 @@ export default function NodeInspectorDrawer({
         <button
           type="button"
           onClick={onClose}
-          className="p-2 rounded-xl text-[#77756f] hover:text-[#171817] hover:bg-[rgba(23,24,23,0.08)] transition-colors cursor-pointer"
+          aria-label="Close node inspector drawer"
+          className="p-2 rounded-xl text-[#6b6963] hover:text-[#171817] hover:bg-[rgba(23,24,23,0.08)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c]"
           title="Close Inspector"
         >
           <X className="w-5 h-5" />
@@ -130,34 +140,36 @@ export default function NodeInspectorDrawer({
       {/* Metrics Strip */}
       <div className="grid grid-cols-4 gap-2.5 p-4 bg-[rgba(247,244,236,0.8)] border-b border-[rgba(23,24,23,0.1)] text-center">
         <div className="p-2 bg-[#fffefa] rounded-xl border border-[rgba(23,24,23,0.08)] shadow-xs">
-          <div className="text-[10px] text-[#77756f] uppercase font-bold">In-Degree</div>
+          <div className="text-[10px] text-[#6b6963] uppercase font-bold">In-Degree</div>
           <div className="font-bold text-[#171817] text-sm mt-0.5">{node.in_degree}</div>
         </div>
         <div className="p-2 bg-[#fffefa] rounded-xl border border-[rgba(23,24,23,0.08)] shadow-xs">
-          <div className="text-[10px] text-[#77756f] uppercase font-bold">Out-Degree</div>
+          <div className="text-[10px] text-[#6b6963] uppercase font-bold">Out-Degree</div>
           <div className="font-bold text-[#df7d4c] text-sm mt-0.5">{node.out_degree}</div>
         </div>
         <div className="p-2 bg-[#fffefa] rounded-xl border border-[rgba(23,24,23,0.08)] shadow-xs">
-          <div className="text-[10px] text-[#77756f] uppercase font-bold">Centrality</div>
+          <div className="text-[10px] text-[#6b6963] uppercase font-bold">Centrality</div>
           <div className="font-bold text-[#171817] text-sm mt-0.5">
             {node.centrality ? node.centrality.toFixed(3) : "0.000"}
           </div>
         </div>
         <div className="p-2 bg-[#fffefa] rounded-xl border border-[rgba(23,24,23,0.08)] shadow-xs">
-          <div className="text-[10px] text-[#77756f] uppercase font-bold">Lines</div>
+          <div className="text-[10px] text-[#6b6963] uppercase font-bold">Lines</div>
           <div className="font-bold text-[#171817] text-sm mt-0.5">{node.line_count}</div>
         </div>
       </div>
 
       {/* Drawer Tabs with Terracotta Active State */}
-      <div className="flex border-b border-[rgba(23,24,23,0.1)] text-xs bg-[rgba(255,254,250,0.9)]">
+      <div role="tablist" aria-label="Node Inspector Sections" className="flex border-b border-[rgba(23,24,23,0.1)] text-xs bg-[rgba(255,254,250,0.9)]">
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === "connections"}
           onClick={() => setActiveTab("connections")}
-          className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 ${
+          className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c] ${
             activeTab === "connections"
               ? "text-[#df7d4c] border-[#df7d4c] bg-[rgba(223,125,76,0.08)] font-bold"
-              : "text-[#77756f] border-transparent hover:text-[#171817]"
+              : "text-[#6b6963] border-transparent hover:text-[#171817]"
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
@@ -165,11 +177,13 @@ export default function NodeInspectorDrawer({
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === "symbols"}
           onClick={() => setActiveTab("symbols")}
-          className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 ${
+          className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c] ${
             activeTab === "symbols"
               ? "text-[#df7d4c] border-[#df7d4c] bg-[rgba(223,125,76,0.08)] font-bold"
-              : "text-[#77756f] border-transparent hover:text-[#171817]"
+              : "text-[#6b6963] border-transparent hover:text-[#171817]"
           }`}
         >
           <Code2 className="w-3.5 h-3.5" />
@@ -177,11 +191,13 @@ export default function NodeInspectorDrawer({
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === "code"}
           onClick={() => setActiveTab("code")}
-          className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 ${
+          className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c] ${
             activeTab === "code"
               ? "text-[#df7d4c] border-[#df7d4c] bg-[rgba(223,125,76,0.08)] font-bold"
-              : "text-[#77756f] border-transparent hover:text-[#171817]"
+              : "text-[#6b6963] border-transparent hover:text-[#171817]"
           }`}
         >
           <Terminal className="w-3.5 h-3.5" />
@@ -201,10 +217,10 @@ export default function NodeInspectorDrawer({
                   <ArrowDownLeft className="w-4 h-4 text-[#df7d4c]" />
                   Imported by ({inboundDependencies.length})
                 </span>
-                <span className="text-[10px] text-[#77756f] font-normal">Callers</span>
+                <span className="text-[10px] text-[#6b6963] font-normal">Callers</span>
               </div>
               {inboundDependencies.length === 0 ? (
-                <p className="text-[11px] text-[#77756f] italic bg-[rgba(23,24,23,0.03)] p-3 rounded-xl border border-[rgba(23,24,23,0.08)]">
+                <p className="text-[11px] text-[#6b6963] italic bg-[rgba(23,24,23,0.03)] p-3 rounded-xl border border-[rgba(23,24,23,0.08)]">
                   No other files import this module directly.
                 </p>
               ) : (
@@ -214,7 +230,7 @@ export default function NodeInspectorDrawer({
                       key={depId}
                       type="button"
                       onClick={() => onSelectNode(depId)}
-                      className="w-full text-left p-3 rounded-xl bg-[#fffefa] hover:bg-[rgba(223,125,76,0.04)] text-[#171817] border border-[rgba(23,24,23,0.1)] hover:border-[#df7d4c] transition-all flex items-center justify-between group cursor-pointer shadow-xs"
+                      className="w-full text-left p-3 rounded-xl bg-[#fffefa] hover:bg-[rgba(223,125,76,0.04)] text-[#171817] border border-[rgba(23,24,23,0.1)] hover:border-[#df7d4c] transition-all flex items-center justify-between group cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c]"
                     >
                       <span className="truncate font-code text-[11px]">{depId}</span>
                       <span className="text-[10px] text-[#df7d4c] shrink-0 ml-2 font-bold">
@@ -233,10 +249,10 @@ export default function NodeInspectorDrawer({
                   <ArrowUpRight className="w-4 h-4 text-[#df7d4c]" />
                   Imports ({outboundDependencies.length})
                 </span>
-                <span className="text-[10px] text-[#77756f] font-normal">Dependencies</span>
+                <span className="text-[10px] text-[#6b6963] font-normal">Dependencies</span>
               </div>
               {outboundDependencies.length === 0 ? (
-                <p className="text-[11px] text-[#77756f] italic bg-[rgba(23,24,23,0.03)] p-3 rounded-xl border border-[rgba(23,24,23,0.08)]">
+                <p className="text-[11px] text-[#6b6963] italic bg-[rgba(23,24,23,0.03)] p-3 rounded-xl border border-[rgba(23,24,23,0.08)]">
                   No local dependencies imported.
                 </p>
               ) : (
@@ -246,7 +262,7 @@ export default function NodeInspectorDrawer({
                       key={depId}
                       type="button"
                       onClick={() => onSelectNode(depId)}
-                      className="w-full text-left p-3 rounded-xl bg-[#fffefa] hover:bg-[rgba(223,125,76,0.04)] text-[#171817] border border-[rgba(23,24,23,0.1)] hover:border-[#df7d4c] transition-all flex items-center justify-between group cursor-pointer shadow-xs"
+                      className="w-full text-left p-3 rounded-xl bg-[#fffefa] hover:bg-[rgba(223,125,76,0.04)] text-[#171817] border border-[rgba(23,24,23,0.1)] hover:border-[#df7d4c] transition-all flex items-center justify-between group cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c]"
                     >
                       <span className="truncate font-code text-[11px]">{depId}</span>
                       <span className="text-[10px] text-[#df7d4c] shrink-0 ml-2 font-bold">
@@ -263,13 +279,13 @@ export default function NodeInspectorDrawer({
         {/* TAB 2: AST Symbols */}
         {activeTab === "symbols" && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs text-[#77756f]">
+            <div className="flex items-center justify-between text-xs text-[#6b6963]">
               <span>Parsed AST Symbols</span>
               <span className="font-code text-[#171817] font-bold">{node.symbols ? node.symbols.length : 0} items</span>
             </div>
 
             {!node.symbols || node.symbols.length === 0 ? (
-              <p className="text-[11px] text-[#77756f] italic bg-[rgba(23,24,23,0.03)] p-4 rounded-xl border border-[rgba(23,24,23,0.08)]">
+              <p className="text-[11px] text-[#6b6963] italic bg-[rgba(23,24,23,0.03)] p-4 rounded-xl border border-[rgba(23,24,23,0.08)]">
                 No function or class definitions extracted from this file.
               </p>
             ) : (
@@ -288,7 +304,7 @@ export default function NodeInspectorDrawer({
                       </span>
                     </div>
                     {sym.start_line && (
-                      <div className="text-[10px] text-[#77756f] font-code">
+                      <div className="text-[10px] text-[#6b6963] font-code">
                         Lines {sym.start_line} - {sym.end_line}
                       </div>
                     )}
@@ -303,25 +319,26 @@ export default function NodeInspectorDrawer({
         {activeTab === "code" && (
           <div className="space-y-3">
             {codeLoading && (
-              <div className="p-8 text-center text-[#77756f] text-xs">
+              <div className="p-8 text-center text-[#6b6963] text-xs">
                 Loading source from workspace...
               </div>
             )}
 
             {codeError && (
-              <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs">
+              <div className="p-3.5 alert-terracotta-error rounded-xl text-xs font-code">
                 {codeError}
               </div>
             )}
 
             {codeData && !codeLoading && (
               <div className="space-y-2.5">
-                <div className="flex items-center justify-between text-xs text-[#77756f]">
+                <div className="flex items-center justify-between text-xs text-[#6b6963]">
                   <span className="font-code text-[#171817] font-bold">{codeData.line_count} lines</span>
                   <button
                     type="button"
                     onClick={() => copyToClipboard(codeData.content, "code")}
-                    className="btn-white px-3 py-1 text-xs cursor-pointer flex items-center gap-1.5"
+                    aria-label="Copy source code to clipboard"
+                    className="btn-white px-3 py-1 text-xs cursor-pointer flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c]"
                   >
                     {copiedCode ? <Check className="w-3.5 h-3.5 text-[#df7d4c]" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedCode ? "Copied" : "Copy"}</span>

@@ -102,6 +102,17 @@ export default function AgentHandoffModal({
     }
   }, [isOpen, owner, repo, issue]);
 
+  // Listens for Escape key press to dismiss modal dialog.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    if (isOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   // Triggers autonomous code resolution pipeline with optional directives.
@@ -208,7 +219,12 @@ export default function AgentHandoffModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(23,24,23,0.45)] backdrop-blur-md">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(23,24,23,0.45)] backdrop-blur-md"
+    >
       <div className="agent-handoff-modal bg-[#fffefa] border border-[rgba(23,24,23,0.16)] rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-xs text-[#171817]">
         {/* Modal Header */}
         <div className="p-6 border-b border-[rgba(23,24,23,0.1)] flex items-center justify-between bg-[rgba(247,244,236,0.85)]">
@@ -223,14 +239,15 @@ export default function AgentHandoffModal({
                   Issue #{issue.number}
                 </span>
               </div>
-              <p className="text-xs text-[#77756f] truncate max-w-lg mt-0.5">{issue.title}</p>
+              <p className="text-xs text-[#6b6963] truncate max-w-lg mt-0.5">{issue.title}</p>
             </div>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-[#77756f] hover:text-[#171817] rounded-xl hover:bg-[rgba(23,24,23,0.08)] transition-colors cursor-pointer"
+            aria-label="Close modal dialog"
+            className="p-2 text-[#6b6963] hover:text-[#171817] rounded-xl hover:bg-[rgba(23,24,23,0.08)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c]"
           >
             <X className="w-5 h-5" />
           </button>
@@ -238,14 +255,16 @@ export default function AgentHandoffModal({
 
         {/* Navigation Tabs */}
         {step === "completed" && (
-          <div className="flex border-b border-[rgba(23,24,23,0.1)] bg-[rgba(255,254,250,0.95)] text-xs">
+          <div role="tablist" aria-label="Workbench Sections" className="flex border-b border-[rgba(23,24,23,0.1)] bg-[rgba(255,254,250,0.95)] text-xs">
             <button
               type="button"
+              role="tab"
+              aria-selected={activeTab === "resolution"}
               onClick={() => setActiveTab("resolution")}
-              className={`flex-1 py-3.5 font-bold transition-all cursor-pointer flex items-center justify-center gap-2 border-b-2 ${
+              className={`flex-1 py-3.5 font-bold transition-all cursor-pointer flex items-center justify-center gap-2 border-b-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c] ${
                 activeTab === "resolution"
                   ? "text-[#df7d4c] border-[#df7d4c] bg-[rgba(223,125,76,0.08)]"
-                  : "text-[#77756f] border-transparent hover:text-[#171817]"
+                  : "text-[#6b6963] border-transparent hover:text-[#171817]"
               }`}
             >
               <FileCode className="w-4 h-4" />
@@ -253,11 +272,13 @@ export default function AgentHandoffModal({
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={activeTab === "chat"}
               onClick={() => setActiveTab("chat")}
-              className={`flex-1 py-3.5 font-bold transition-all cursor-pointer flex items-center justify-center gap-2 border-b-2 ${
+              className={`flex-1 py-3.5 font-bold transition-all cursor-pointer flex items-center justify-center gap-2 border-b-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c] ${
                 activeTab === "chat"
                   ? "text-[#df7d4c] border-[#df7d4c] bg-[rgba(223,125,76,0.08)]"
-                  : "text-[#77756f] border-transparent hover:text-[#171817]"
+                  : "text-[#6b6963] border-transparent hover:text-[#171817]"
               }`}
             >
               <MessageSquare className="w-4 h-4" />
@@ -269,7 +290,7 @@ export default function AgentHandoffModal({
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 flex items-center gap-3">
+            <div className="p-4 alert-terracotta-error rounded-2xl flex items-center gap-3">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <span>{error}</span>
             </div>
@@ -283,7 +304,7 @@ export default function AgentHandoffModal({
                   <CloudCog className="w-4 h-4 text-[#df7d4c]" strokeWidth={2.25} />
                   <span>Autonomous Multi-File Resolution Dispatch</span>
                 </div>
-                <p className="text-[#77756f] leading-relaxed text-xs">
+                <p className="text-[#6b6963] leading-relaxed text-xs">
                   The autonomous agent will analyze AST caller/dependency networks, load impacted
                   files into context, generate code modifications, and deliver verified Pull Request diffs.
                 </p>
@@ -411,7 +432,8 @@ export default function AgentHandoffModal({
                         <button
                           type="button"
                           onClick={copyDiff}
-                          className="btn-white px-3 py-1 text-xs cursor-pointer flex items-center gap-1.5"
+                          aria-label="Copy diff patch to clipboard"
+                          className="btn-white px-3 py-1 text-xs cursor-pointer flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c]"
                         >
                           {copiedDiff ? <Check className="w-3.5 h-3.5 text-[#df7d4c]" /> : <Copy className="w-3.5 h-3.5" />}
                           <span>{copiedDiff ? "Copied" : "Copy Diff"}</span>
@@ -419,7 +441,29 @@ export default function AgentHandoffModal({
                       </div>
 
                       <div className="bg-[#f4efe6] border border-[rgba(23,24,23,0.12)] rounded-2xl p-4 overflow-x-auto max-h-80 text-xs font-code leading-relaxed text-[#171817]">
-                        <pre>{result.diff}</pre>
+                        <pre className="space-y-0.5">
+                          {result.diff.split("\n").map((line, lIdx) => {
+                            const isAdded = line.startsWith("+") && !line.startsWith("+++");
+                            const isRemoved = line.startsWith("-") && !line.startsWith("---");
+                            const isHunk = line.startsWith("@@");
+                            return (
+                              <div
+                                key={lIdx}
+                                className={`px-1 rounded-xs ${
+                                  isAdded
+                                    ? "bg-[rgba(34,197,94,0.12)] text-[#15803d]"
+                                    : isRemoved
+                                    ? "bg-[rgba(239,68,68,0.12)] text-[#b91c1c]"
+                                    : isHunk
+                                    ? "text-[#df7d4c] font-bold"
+                                    : "text-[#171817]"
+                                }`}
+                              >
+                                {line || " "}
+                              </div>
+                            );
+                          })}
+                        </pre>
                       </div>
                     </div>
                   )}

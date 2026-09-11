@@ -53,6 +53,7 @@ export default function IssueExplorer({
   const [showOriginalBody, setShowOriginalBody] = useState(false);
   const [seeding, setSeeding] = useState(false);
 
+  // Injects sample benchmark issue into repository database for demonstration.
   const handleSeedDemoIssue = async () => {
     setSeeding(true);
     try {
@@ -66,6 +67,7 @@ export default function IssueExplorer({
     }
   };
 
+  // Loads repository issues from backend API with optional label filtering and caching.
   const loadIssues = useCallback(
     async (forceRefresh = false) => {
       setLoadingIssues(true);
@@ -170,6 +172,7 @@ export default function IssueExplorer({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search issues..."
+              aria-label="Search issues by title or description"
               className="bg-transparent text-xs text-[#171817] placeholder-[rgba(23,24,23,0.45)] focus:outline-none w-44 font-code"
             />
           </div>
@@ -179,7 +182,8 @@ export default function IssueExplorer({
             type="button"
             onClick={() => loadIssues(true)}
             disabled={loadingIssues}
-            className="btn-white px-4 py-2 text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            aria-label="Sync issues from repository"
+            className="btn-white px-4 py-2 text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c]"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loadingIssues ? "animate-spin" : ""}`} />
             <span>Sync</span>
@@ -193,7 +197,7 @@ export default function IssueExplorer({
           <button
             type="button"
             onClick={() => setSelectedLabel("all")}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border shadow-xs ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c] ${
               selectedLabel === "all"
                 ? "bg-[#df7d4c] text-[#fffdf8] border-[#df7d4c]"
                 : "bg-[#fffefa] text-[#171817] border-[rgba(23,24,23,0.14)] hover:border-[#df7d4c]"
@@ -206,7 +210,7 @@ export default function IssueExplorer({
               key={lbl.name}
               type="button"
               onClick={() => setSelectedLabel(lbl.name)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border shadow-xs ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#df7d4c] ${
                 selectedLabel === lbl.name
                   ? "bg-[#df7d4c] text-[#fffdf8] border-[#df7d4c]"
                   : "bg-[#fffefa] text-[#171817] border-[rgba(23,24,23,0.14)] hover:border-[#df7d4c]"
@@ -220,7 +224,7 @@ export default function IssueExplorer({
 
       {/* Error Alert */}
       {issuesError && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs font-code text-red-700">
+        <div className="p-4 alert-terracotta-error rounded-2xl text-xs font-code">
           {issuesError}
         </div>
       )}
@@ -359,7 +363,7 @@ export default function IssueExplorer({
               )}
 
               {explanationError && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs font-code text-red-700">
+                <div className="p-4 alert-terracotta-error rounded-2xl text-xs font-code">
                   {explanationError}
                 </div>
               )}
