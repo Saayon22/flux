@@ -16,9 +16,12 @@ import {
   RepoMetadata,
   GraphResponse,
   RepoUnderstanding,
+  IssueSummary,
+  IssueExplanation,
 } from "./lib/api";
 import ObsidianGraphCanvas from "./components/ObsidianGraphCanvas";
 import IssueExplorer from "./components/IssueExplorer";
+import AgentHandoffModal from "./components/AgentHandoffModal";
 
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
@@ -41,6 +44,11 @@ export default function Home() {
   // Phase 4: Graph Explorer Focused Node & Section Scroll
   const [focusedGraphNodeId, setFocusedGraphNodeId] = useState<string | null>(null);
   const graphSectionRef = useRef<HTMLDivElement | null>(null);
+
+  // Phase 6 & 7: Google ADK Agent Handoff State
+  const [handoffIssue, setHandoffIssue] = useState<IssueSummary | null>(null);
+  const [handoffExplanation, setHandoffExplanation] = useState<IssueExplanation | null>(null);
+  const [isHandoffModalOpen, setIsHandoffModalOpen] = useState(false);
 
   const handleJumpToNode = (nodeId: string) => {
     setFocusedGraphNodeId(nodeId);
@@ -534,7 +542,24 @@ export default function Home() {
               owner={repo.owner}
               repo={repo.name}
               onSelectFile={handleJumpToNode}
+              onPrepareAgentHandoff={(selectedIssue, exp) => {
+                setHandoffIssue(selectedIssue);
+                setHandoffExplanation(exp);
+                setIsHandoffModalOpen(true);
+              }}
             />
+
+            {/* Phase 6 & 7: Google ADK Autonomous Agent Handoff Modal */}
+            {handoffIssue && (
+              <AgentHandoffModal
+                isOpen={isHandoffModalOpen}
+                onClose={() => setIsHandoffModalOpen(false)}
+                owner={repo.owner}
+                repo={repo.name}
+                issue={handoffIssue}
+                explanation={handoffExplanation}
+              />
+            )}
 
             {/* Documentation Tabs */}
             <div className="space-y-3 pt-2">
