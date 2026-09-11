@@ -233,7 +233,9 @@ export default function ObsidianGraphCanvas({
     setSelectedNode(target);
   }, []);
 
+  // Handle external focus triggers (e.g. from Understanding cards)
   useEffect(() => {
+
     if (focusedNodeId) {
       centerOnNode(focusedNodeId);
     }

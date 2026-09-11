@@ -1,35 +1,19 @@
-"""
-Repository Digest Builder Service.
-Converts AST dependency graph metrics, central files, clusters, and documentation
-into a compact, structured Markdown digest designed for LLM prompts.
-"""
+# Repository Digest Builder Service for synthesizing context into Markdown for LLM prompts.
 
 from typing import Dict, Any, List
 from collections import defaultdict
 from models.graph import GraphResponse
 
 
+# Formats repository metadata, dependency metrics, central hubs, and documentation into a prompt digest.
 def build_repository_digest(repo_data: Dict[str, Any], graph_response: GraphResponse) -> str:
-    """
-    Templates repository metadata, graph metrics, central files, and documentation
-    into a concise plain-text context for LLM summarization.
-    
-    Args:
-        repo_data: Stored repository metadata dictionary from SQLite.
-        graph_response: Computed dependency graph response with nodes, edges, and metrics.
-        
-    Returns:
-        Structured Markdown string digest.
-    """
     metrics = graph_response.metrics
     nodes = graph_response.nodes
 
-    # Group files by cluster
     clusters: Dict[int, List[str]] = defaultdict(list)
     for node in nodes:
         clusters[node.cluster].append(node.id)
 
-    # 1. Top central files formatted with their key symbols
     central_files_lines = []
     for cf in metrics.top_central_files:
         node_match = next((n for n in nodes if n.id == cf.file), None)
@@ -43,31 +27,17 @@ def build_repository_digest(repo_data: Dict[str, Any], graph_response: GraphResp
                 sym_summary.append(f"Functions: {', '.join(funcs)}")
 
         sym_str = f" ({'; '.join(sym_summary)})" if sym_summary else ""
-        central_files_lines.append(
-            f"- `{cf.file}` — Centrality: {cf.score}, Imported by: {cf.in_degree} files, Imports: {cf.out_degree} files{sym_str}"
-        )
+        central_files_lines.append(f"- `{cf.file}` — Centrality: {cf.score}, Imported by: {cf.in_degree} files, Imports: {cf.out_degree} files{sym_str}")
 
-    # 2. Cluster grouping summary
     cluster_lines = []
     for c_id, f_list in sorted(clusters.items()):
         sample_files = ", ".join([f"`{f}`" for f in f_list[:5]])
         extra = f" (+{len(f_list) - 5} more)" if len(f_list) > 5 else ""
         cluster_lines.append(f"- **Module Cluster {c_id + 1}** ({len(f_list)} files): {sample_files}{extra}")
 
-    # 3. Documentation excerpts (safely truncated)
-    readme_excerpt = ""
-    if repo_data.get("readme_content"):
-        readme_raw = repo_data["readme_content"].strip()
-        readme_excerpt = readme_raw[:2500] + ("\n...[truncated]" if len(readme_raw) > 2500 else "")
-    else:
-        readme_excerpt = "No README documentation provided."
+    readme_excerpt = (repo_data.get("readme_content") or "No README documentation provided.").strip()[:2500]
+    contributing_excerpt = (repo_data.get("contributing_content") or "").strip()[:1000]
 
-    contributing_excerpt = ""
-    if repo_data.get("contributing_content"):
-        contrib_raw = repo_data["contributing_content"].strip()
-        contributing_excerpt = contrib_raw[:1000] + ("\n...[truncated]" if len(contrib_raw) > 1000 else "")
-
-    # Combine into unified digest
     digest_parts = [
         f"# Repository Digest: {repo_data.get('owner')}/{repo_data.get('name')}",
         "",
@@ -96,12 +66,6 @@ def build_repository_digest(repo_data: Dict[str, Any], graph_response: GraphResp
     ]
 
     if contributing_excerpt:
-        digest_parts.extend([
-            "",
-            "## Contributing Guidelines",
-            "```markdown",
-            contributing_excerpt,
-            "```",
-        ])
+        digest_parts.extend(["", "## Contributing Guidelines", "```markdown", contributing_excerpt, "```"])
 
     return "\n".join(digest_parts)

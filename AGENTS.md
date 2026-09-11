@@ -1,17 +1,8 @@
 # AGENTS.md
 
-## flux
+Dont touch frontend folder and its files.
 
-Follow `flux_PRD.md`.
-
-* Keep the implementation simple, focused, and robust.
-* Stack: Next.js + TypeScript, FastAPI + Python, Tree-sitter (Python, JS/TS, Go, Rust), NetworkX, Google ADK (Agent Development Kit), Google Gemini API (`google-genai`), GitHub API, SQLite.
-* Preserve the flow: **Repo → Graph → Understanding → Issue → Agent → PR/Plan**.
-* Use Tree-sitter + NetworkX for grounded repository analysis.
-* Use Google ADK multi-agent framework (`flux_root` coordinator, `summarizer_agent`, `issue_explainer_agent`, `orchestrator_agent`).
-* Use Google Gemini for grounded summaries, issue triage, and autonomous code patch synthesis.
-* Keep cloned repositories in `workspaces/`.
-* Require Human-in-the-Loop opt-in before executing autonomous code handoff.
-* Avoid unnecessary dependencies and infrastructure.
-
-
+## Commenting Rules
+- Strictly use single-line comments (`#` or `//`); no multi-line docstrings, block comments, or ASCII art banners.
+- Add exactly one single-line comment at the top of every file and one above every function/method explaining its purpose.
+- Use concise single-line comments only where necessary to explain complex logic.

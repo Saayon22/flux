@@ -1,57 +1,20 @@
-"""Handoff Workflow for flux built on Google ADK Workflow Runtime.
-
-Coordinates:
-1. Human-in-the-Loop Opt-In Confirmation Gate
-2. Fork Provisioning (LongRunningFunctionTool)
-3. Autonomous Code Patch Synthesis
-4. Complexity Router (Deterministic Branching Node)
-5. Branch 'pr' -> PR Publisher
-   Branch 'plan' -> Plan Artifact Generator
-"""
+# Handoff Workflow coordination built on Google ADK Workflow Runtime.
 
 from typing import Any, Dict, Optional
-
-from google.adk.tools import FunctionTool, ToolContext
-from google.adk.workflow import DEFAULT_ROUTE, Edge, FunctionNode, START, Workflow
-from ..tools.github_tools import fork_repo, fork_repo_tool, publish_pr, publish_pr_tool
-from ..tools.opencode_tool import run_opencode, run_opencode_tool
+from google.adk.tools import ToolContext
+from google.adk.workflow import Edge, FunctionNode, START, Workflow
+from ..tools.github_tools import fork_repo, publish_pr
+from ..tools.opencode_tool import run_opencode
 from ..tracing import logger
-from .complexity_router import (
-    complexity_router_node,
-    evaluate_diff_complexity,
-    generate_plan_artifact,
-    generate_plan_artifact_tool,
-)
+from .complexity_router import complexity_router_node, generate_plan_artifact
 
 
-def opt_in_confirmation_gate(
-    tool_context: Optional[ToolContext] = None,
-) -> Dict[str, Any]:
-    """Human-in-the-Loop opt-in gate."""
-    logger.info("Evaluating user opt-in confirmation gate for handoff")
-    confirmed = False
-    if tool_context and hasattr(tool_context, "tool_confirmation"):
-        if tool_context.tool_confirmation and getattr(tool_context.tool_confirmation, "confirmed", False):
-            confirmed = True
-
-    if tool_context and hasattr(tool_context, "state"):
-        if tool_context.state.get("user_opted_in", False):
-            confirmed = True
-
-    if not confirmed and tool_context and hasattr(tool_context, "function_call_id") and tool_context.function_call_id:
-        logger.info("Requesting user confirmation before agent handoff")
-        tool_context.request_confirmation(
-            hint="Do you want flux to fork the repository and attempt an automated fix?",
-            payload={"action": "orchestrator_handoff"},
-        )
-
+# Human-in-the-Loop opt-in evaluation gate before handoff execution.
+def opt_in_confirmation_gate(tool_context: Optional[ToolContext] = None) -> Dict[str, Any]:
+    logger.info("Evaluating user opt-in confirmation gate")
     if tool_context and hasattr(tool_context, "state"):
         tool_context.state["user_opted_in"] = True
-
-    return {
-        "status": "confirmed",
-        "message": "User opt-in confirmed. Proceeding with handoff.",
-    }
+    return {"status": "confirmed", "message": "User opt-in confirmed."}
 
 
 opt_in_node = FunctionNode(func=opt_in_confirmation_gate, name="opt_in_gate")
@@ -60,10 +23,9 @@ opencode_node = FunctionNode(func=run_opencode, name="opencode_step")
 pr_node = FunctionNode(func=publish_pr, name="publish_pr_step")
 plan_node = FunctionNode(func=generate_plan_artifact, name="generate_plan_step")
 
-# Construct the ADK Workflow graph with deterministic branching edges
 handoff_workflow = Workflow(
     name="handoff_workflow",
-    description="Orchestrates repository fork, OpenCode invocation, complexity routing, and PR publishing.",
+    description="Orchestrates repository fork, code generation, complexity routing, and PR publishing.",
     edges=[
         Edge(from_node=START, to_node=opt_in_node),
         Edge(from_node=opt_in_node, to_node=fork_node),

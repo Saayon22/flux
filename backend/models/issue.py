@@ -1,20 +1,18 @@
-"""
-Pydantic models for GitHub Issues and Grounded Issue Explanations.
-"""
+# Pydantic models for GitHub Issues and Grounded Issue Explanations.
 
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
+# GitHub issue label representation with display color.
 class IssueLabel(BaseModel):
-    """GitHub issue label representation with display color."""
     name: str
     color: str = "71717a"
     description: Optional[str] = None
 
 
+# Structured summary of a GitHub issue.
 class IssueSummary(BaseModel):
-    """Structured summary of an open GitHub issue."""
     id: str
     number: int
     title: str
@@ -27,15 +25,15 @@ class IssueSummary(BaseModel):
     created_at: str
 
 
+# File and functions relevant to resolving a specific issue.
 class RelevantFileItem(BaseModel):
-    """File and functions relevant to resolving a specific issue."""
     file: str
     reason: str
     symbols_to_inspect: List[str] = Field(default_factory=list)
 
 
+# Plain-English grounded issue explanation and task checklist.
 class IssueExplanation(BaseModel):
-    """Plain-English grounded issue explanation and task checklist."""
     issue_id: str
     repo_id: str
     issue_number: int
@@ -43,14 +41,14 @@ class IssueExplanation(BaseModel):
     real_world_analogy: str
     relevant_files: List[RelevantFileItem] = Field(default_factory=list)
     implementation_steps: List[str] = Field(default_factory=list)
-    estimated_complexity: str = "Medium"  # "Low" | "Medium" | "High"
+    estimated_complexity: str = "Medium"
     model_used: str
     is_fallback: bool = False
     created_at: str
 
 
+# Response schema containing list of issues and available filter labels.
 class IssueListResponse(BaseModel):
-    """Response containing list of issues and available filter labels for a repository."""
     repo_id: str
     total_count: int
     available_labels: List[IssueLabel]

@@ -1,12 +1,9 @@
-"""
-Main entry point for flux FastAPI backend application.
-Configures CORS middleware, database lifecycle, and API routing.
-"""
+# Main FastAPI entry point for flux application lifecycle, CORS, and routing.
 
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
-# Load environment variables from .env
+# Loads environment variables from .env
 load_dotenv()
 
 from fastapi import FastAPI
@@ -22,24 +19,16 @@ from api.issues import router as issues_router
 from api.agent import router as agent_router
 
 
+# Application lifespan handler initializing SQLite schemas on startup.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Application lifespan handler.
-    Initializes SQLite database schemas on startup.
-    """
     init_db()
     yield
 
 
-app = FastAPI(
-    title="flux API",
-    description="Backend service for grounded repository analysis, AST dependency graphing, and agent handoff.",
-    version="0.1.0",
-    lifespan=lifespan,
-)
+app = FastAPI(title="flux API", version="0.1.0", lifespan=lifespan)
 
-# CORS middleware for Next.js frontend communication
+# CORS middleware configuration for frontend communication
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins or ["*"],
@@ -48,7 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount API routers
+# API router mounts
 app.include_router(repos_router)
 app.include_router(graph_router)
 app.include_router(understanding_router)
@@ -57,10 +46,7 @@ app.include_router(issues_router)
 app.include_router(agent_router)
 
 
+# System health check endpoint.
 @app.get("/api/health", tags=["system"])
 async def health_check():
-    """Health check endpoint returning system status."""
-    return {
-        "status": "healthy",
-        "app": "flux",
-    }
+    return {"status": "healthy", "app": "flux"}

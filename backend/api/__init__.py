@@ -1,3 +1,1 @@
-"""
-API routers package for flux endpoints.
-"""
+# Package initialization for API routers.

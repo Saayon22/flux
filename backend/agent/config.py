@@ -1,57 +1,24 @@
-"""Configuration for flux Google ADK Agent System.
-Defines model routing, thresholds, and execution parameters.
-"""
+# Configuration for Google ADK Agent System and Complexity Router parameters.
 
-import os
 from pathlib import Path
-from dotenv import load_dotenv
+from config import settings
 
-# Ensure environment variables are loaded from root and backend .env
-load_dotenv()
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
-
-# Base directories
 BASE_DIR = Path(__file__).resolve().parent.parent
-WORKSPACES_DIR = BASE_DIR.parent / "workspaces"
+WORKSPACES_DIR = settings.workspaces_dir
 
-# Synchronize with backend settings if available
-try:
-    from config import settings
-    _conf_github_token = settings.github_token
-    _conf_gemini_key = settings.effective_api_key
-    _conf_model = settings.effective_model
-except Exception:
-    _conf_github_token = ""
-    _conf_gemini_key = ""
-    _conf_model = ""
+GEMINI_API_KEY = settings.effective_api_key
+DEFAULT_CHEAP_MODEL = settings.effective_model
+DEFAULT_STRONGEST_MODEL = settings.effective_model
 
-# Google Gemini model routing from environment only
-GEMINI_API_KEY = _conf_gemini_key or os.getenv("GEMINI_API_KEY", "")
-if GEMINI_API_KEY and "GEMINI_API_KEY" not in os.environ:
-    os.environ["GEMINI_API_KEY"] = GEMINI_API_KEY
+MAX_DIFF_LINES_FOR_PR = settings.max_diff_lines_for_pr
+MAX_FILES_TOUCHED_FOR_PR = settings.max_files_touched_for_pr
 
-DEFAULT_CHEAP_MODEL = _conf_model or os.getenv("GEMINI_MODEL", "")
-DEFAULT_STRONGEST_MODEL = _conf_model or os.getenv("GEMINI_MODEL", "")
+GITHUB_TOKEN = settings.github_token
+OPENCODE_CLI_CMD = settings.opencode_cli_cmd
+OPENCODE_MODEL = settings.opencode_model or settings.effective_model
+OPENCODE_TIMEOUT = settings.opencode_timeout
+DEMO_MODE = settings.demo_mode
 
-# Complexity Router thresholds for PR vs Plan Artifact (per PRD)
-MAX_DIFF_LINES_FOR_PR = int(os.getenv("MAX_DIFF_LINES_FOR_PR", "150"))
-MAX_FILES_TOUCHED_FOR_PR = int(os.getenv("MAX_FILES_TOUCHED_FOR_PR", "4"))
-
-# GitHub configuration
-GITHUB_TOKEN = _conf_github_token or os.getenv("GITHUB_TOKEN", "")
-if GITHUB_TOKEN and "GITHUB_TOKEN" not in os.environ:
-    os.environ["GITHUB_TOKEN"] = GITHUB_TOKEN
-
-# OpenCode headless configuration
-OPENCODE_CLI_CMD = os.getenv("OPENCODE_CLI_CMD", "opencode")
-OPENCODE_MODEL = os.getenv("OPENCODE_MODEL", os.getenv("GEMINI_MODEL", ""))
-OPENCODE_TIMEOUT = int(os.getenv("OPENCODE_TIMEOUT", "120"))
-
-# Resiliency settings
-DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() in ("true", "1", "yes")
-
-# Known-good cached fallback diff for live-demo reliability
 FALLBACK_DEMO_DIFF = """--- a/src/handler.py
 +++ b/src/handler.py
 @@ -10,7 +10,7 @@ def process_event(event_data: dict) -> dict:
