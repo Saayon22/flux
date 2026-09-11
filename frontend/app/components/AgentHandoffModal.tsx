@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * AgentHandoffModal.tsx
+ * Akaru Prestige Edition: Autonomous Code Resolution Handoff Modal.
+ */
+
 import React, { useState, useEffect } from "react";
 import {
   IssueSummary,
@@ -11,6 +16,22 @@ import {
   chatWithAgent,
   getHandoffResult,
 } from "../lib/api";
+import {
+  Bot,
+  GitPullRequest,
+  Terminal,
+  Copy,
+  Check,
+  ExternalLink,
+  X,
+  FileCode,
+  RotateCcw,
+  Send,
+  CheckCircle2,
+  AlertCircle,
+  CloudCog,
+  MessageSquare,
+} from "lucide-react";
 
 interface AgentHandoffModalProps {
   isOpen: boolean;
@@ -22,6 +43,9 @@ interface AgentHandoffModalProps {
 }
 
 type HandoffStep = "opt_in" | "fork" | "synthesizing" | "routing" | "completed" | "error";
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
 
 export default function AgentHandoffModal({
   isOpen,
@@ -58,11 +82,10 @@ export default function AgentHandoffModal({
       setChatHistory([
         {
           role: "agent",
-          text: `Hello! I am the flux Google ADK Agent. I am ready to resolve Issue #${issue.number} ("${issue.title}"). Confirm opt-in to begin autonomous resolution.`,
+          text: `Initialized FLUX Agent. Ready to resolve Issue #${issue.number} ("${issue.title}"). Confirm opt-in to launch autonomous pipeline.`,
         },
       ]);
 
-      // Check if an autonomous handoff (PR or Plan Artifact) was already generated and persisted in SQLite
       getHandoffResult(owner, repo, issue.number).then((cached) => {
         if (cached) {
           setResult(cached);
@@ -72,172 +95,83 @@ export default function AgentHandoffModal({
               ...prev,
               {
                 role: "agent",
-                text: `Retrieved persisted Pull Request from SQLite: ${cached.pr?.pr_url} (#${cached.pr?.pr_number}).`,
-              },
-            ]);
-          } else if (cached.plan) {
-            setChatHistory((prev) => [
-              ...prev,
-              {
-                role: "agent",
-                text: `Retrieved persisted Implementation Plan Artifact from SQLite: "${cached.plan?.title}".`,
+                text: `Retrieved persisted Pull Request: #${cached.pr?.pr_number} (${cached.pr?.pr_url}).`,
               },
             ]);
           }
         }
       });
     }
-  }, [isOpen, issue, owner, repo]);
+  }, [isOpen, owner, repo, issue]);
 
   if (!isOpen) return null;
 
-  const handleExecuteHandoff = async () => {
-    if (!optInConfirmed) {
-      setError("Please confirm user opt-in before executing autonomous handoff.");
-      return;
-    }
-
+  const handleStartHandoff = async () => {
+    if (!optInConfirmed) return;
     setLoading(true);
     setError(null);
-    setStep("fork");
+    setStep("synthesizing");
 
     try {
-      // Simulate step-by-step progress visually while calling the backend endpoint
-      const stepTimer1 = setTimeout(() => setStep("synthesizing"), 1200);
-      const stepTimer2 = setTimeout(() => setStep("routing"), 2800);
-
-      const res = await triggerAgentHandoff(owner, repo, issue.number, true, userNotes);
-
-      clearTimeout(stepTimer1);
-      clearTimeout(stepTimer2);
-
-      setResult(res);
+      const response = await triggerAgentHandoff(owner, repo, issue.number, optInConfirmed, userNotes);
+      setResult(response);
       setStep("completed");
-      setLoading(false);
-
-      if (res.decision === "pr" && res.pr) {
-        setChatHistory((prev) => [
-          ...prev,
-          {
-            role: "agent",
-            text: `Pull Request successfully opened at ${res.pr?.pr_url}! Diff size: ${res.diff_stats?.line_count} lines across ${res.diff_stats?.files_touched.length} file(s).`,
-          },
-        ]);
-      } else if (res.plan) {
-        setChatHistory((prev) => [
-          ...prev,
-          {
-            role: "agent",
-            text: res.diff_stats?.pre_routed
-              ? `High-complexity architectural issue detected upfront. Generated structured Implementation Plan Artifact: "${res.plan?.title}". Speculative code modifications safely bypassed.`
-              : `Fix complexity exceeded single PR threshold. Generated structured Implementation Plan Artifact: "${res.plan?.title}".`,
-          },
-        ]);
-      }
-    } catch (err: any) {
-      setError(err.message || "Autonomous agent handoff execution failed.");
-      setStep("error");
-      setLoading(false);
-    }
-  };
-
-  const handleConfirmPublishPR = async () => {
-    if (!result?.diff) return;
-    setPublishingPR(true);
-    setError(null);
-    try {
-      const res = await publishPullRequest(owner, repo, issue.number, {
-        diff: result.diff,
-        fork_ref: result.fork?.fork_ref,
-      });
-      setResult((prev) =>
-        prev
-          ? {
-              ...prev,
-              pr: res.pr,
-              message: res.message,
-            }
-          : null
-      );
+      const decisionType = response.decision || "plan";
       setChatHistory((prev) => [
         ...prev,
         {
           role: "agent",
-          text: `Pull Request successfully opened on GitHub: ${res.pr?.pr_url} (#${res.pr?.pr_number})!`,
+          text: `Autonomous run completed. Decision: ${decisionType.toUpperCase()}. ${
+            decisionType === "pr"
+              ? "Pull Request patch synthesized."
+              : "Plan Artifact generated for human review."
+          }`,
         },
       ]);
-    } catch (err: any) {
-      setError(err.message || "Failed to publish Pull Request to GitHub.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Agent handoff failed to execute."));
+      setStep("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePublishPR = async () => {
+    if (!result) return;
+    setPublishingPR(true);
+    try {
+      const res = await publishPullRequest(owner, repo, issue.number);
+      if (res.status === "pr_published" && res.pr) {
+        setResult((prev) =>
+          prev
+            ? {
+                ...prev,
+                pr: res.pr,
+              }
+            : null
+        );
+      }
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to publish PR to GitHub."));
     } finally {
       setPublishingPR(false);
     }
   };
 
-  const handleDiscardRollback = async () => {
+  const handleRollback = async () => {
     setRollingBack(true);
-    setError(null);
     try {
       await rollbackHandoff(owner, repo, issue.number);
-      setChatHistory((prev) => [
-        ...prev,
-        {
-          role: "agent",
-          text: "Workspace modifications were discarded and the temporary fix branch was reset.",
-        },
-      ]);
-      onClose();
-    } catch (err: any) {
-      setError(err.message || "Failed to rollback workspace modifications.");
+      setResult(null);
+      setStep("opt_in");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Rollback failed."));
     } finally {
       setRollingBack(false);
     }
   };
 
-  const handleResetAndRerun = async () => {
-    setRollingBack(true);
-    setError(null);
-    try {
-      await rollbackHandoff(owner, repo, issue.number);
-    } catch {}
-    setResult(null);
-    setStep("opt_in");
-    setRollingBack(false);
-    setChatHistory((prev) => [
-      ...prev,
-      {
-        role: "agent",
-        text: "Cached handoff result was cleared. You can now re-run autonomous resolution.",
-      },
-    ]);
-  };
-
-  const handleCopyDiff = () => {
-    if (result?.diff) {
-      navigator.clipboard.writeText(result.diff);
-      setCopiedDiff(true);
-      setTimeout(() => setCopiedDiff(false), 2500);
-    }
-  };
-
-  const handleDownloadPlan = () => {
-    if (!result?.plan) return;
-    const md =
-      result.plan.markdown_content ||
-      `# ${result.plan.title}\n\n${result.plan.summary}\n\n## Refactoring Roadmap\n${result.plan.steps
-        .map((s, idx) => `- [ ] Step ${idx + 1}: ${s}`)
-        .join("\n")}\n\n## Risk Rating\n${result.plan.estimated_risk}`;
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `flux-plan-issue-${issue.number}.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleSendChatMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatMessage.trim() || chatLoading) return;
 
@@ -247,435 +181,304 @@ export default function AgentHandoffModal({
     setChatLoading(true);
 
     try {
-      const res = await chatWithAgent(
-        `Context: Repository ${owner}/${repo}, Issue #${issue.number}: "${issue.title}". User query: ${userText}`
-      );
-      setChatHistory((prev) => [...prev, { role: "agent", text: res.response }]);
-    } catch (err: any) {
+      const reply = await chatWithAgent(userText);
+      setChatHistory((prev) => [...prev, { role: "agent", text: reply.response }]);
+    } catch (err: unknown) {
       setChatHistory((prev) => [
         ...prev,
-        { role: "agent", text: `Error: ${err.message || "Agent response failed"}` },
+        {
+          role: "agent",
+          text: `Error processing query: ${getErrorMessage(err, "Communication error.")}`,
+        },
       ]);
     } finally {
       setChatLoading(false);
     }
   };
 
+  const copyDiff = () => {
+    if (result?.diff) {
+      navigator.clipboard.writeText(result.diff);
+      setCopiedDiff(true);
+      setTimeout(() => setCopiedDiff(false), 2000);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
-      <div className="relative w-full max-w-4xl bg-neutral-950 border border-neutral-800 rounded overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+      <div className="bg-[#121212] border border-white/15 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-xs">
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-black">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold font-mono text-white">
-                Agent Handoff
-              </h3>
-              <span className="text-xs font-mono text-neutral-400">
-                (Issue #{issue.number}: {issue.title})
-              </span>
+        <div className="p-6 border-b border-white/10 flex items-center justify-between bg-[#171717]">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-[#e49366] text-[#0e0e0e] flex items-center justify-center font-bold shadow-md">
+              <Bot className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-white text-base">Agent Handoff Workbench</h3>
+                <span className="text-[10px] px-2.5 py-0.5 bg-white/10 text-white rounded-md border border-white/20 font-code font-bold">
+                  Issue #{issue.number}
+                </span>
+              </div>
+              <p className="text-xs text-[#9e9e9e] truncate max-w-lg mt-0.5">{issue.title}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Tabs */}
-            <div className="flex bg-neutral-900 border border-neutral-800 rounded text-xs font-mono">
-              <button
-                type="button"
-                onClick={() => setActiveTab("resolution")}
-                className={`px-2.5 py-1 rounded cursor-pointer ${
-                  activeTab === "resolution" ? "bg-neutral-800 text-white font-bold" : "text-neutral-400 hover:text-neutral-200"
-                }`}
-              >
-                Handoff Flow
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("chat")}
-                className={`px-2.5 py-1 rounded cursor-pointer ${
-                  activeTab === "chat" ? "bg-neutral-800 text-white font-bold" : "text-neutral-400 hover:text-neutral-200"
-                }`}
-              >
-                Agent Chat
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-2 py-1 text-neutral-400 hover:text-white text-xs font-mono cursor-pointer"
-            >
-              [Close]
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 text-white/60 hover:text-white rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
+        {/* Navigation Tabs */}
+        {step === "completed" && (
+          <div className="flex border-b border-white/10 bg-[#141414] text-xs">
+            <button
+              type="button"
+              onClick={() => setActiveTab("resolution")}
+              className={`flex-1 py-3.5 font-bold transition-all cursor-pointer flex items-center justify-center gap-2 border-b-2 ${
+                activeTab === "resolution"
+                  ? "text-[#e49366] border-[#e49366] bg-white/5"
+                  : "text-white/60 border-transparent hover:text-white"
+              }`}
+            >
+              <FileCode className="w-4 h-4" />
+              <span>Resolution Patch &amp; Diffs</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("chat")}
+              className={`flex-1 py-3.5 font-bold transition-all cursor-pointer flex items-center justify-center gap-2 border-b-2 ${
+                activeTab === "chat"
+                  ? "text-[#e49366] border-[#e49366] bg-white/5"
+                  : "text-white/60 border-transparent hover:text-white"
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Interactive Agent Chat ({chatHistory.length})</span>
+            </button>
+          </div>
+        )}
+
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {activeTab === "chat" ? (
-            /* Agent Chat Tab */
-            <div className="flex flex-col h-[460px]">
-              <div className="flex-1 overflow-y-auto space-y-2 p-3 bg-neutral-900 rounded border border-neutral-800 font-mono text-xs">
-                {chatHistory.map((m, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex flex-col ${
-                      m.role === "user" ? "items-end" : "items-start"
-                    }`}
-                  >
-                    <span className="text-[10px] text-neutral-500 mb-0.5">
-                      {m.role === "user" ? "You" : "Agent"}
-                    </span>
-                    <div
-                      className={`max-w-[85%] rounded p-2.5 whitespace-pre-wrap ${
-                        m.role === "user"
-                          ? "bg-neutral-800 text-white border border-neutral-700"
-                          : "bg-black border border-neutral-800 text-neutral-300"
-                      }`}
-                    >
-                      {m.text}
-                    </div>
-                  </div>
-                ))}
-                {chatLoading && (
-                  <div className="text-neutral-500 text-xs font-mono">
-                    Agent is responding...
-                  </div>
-                )}
+        <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
+          {error && (
+            <div className="p-4 bg-red-950/60 border border-red-800 rounded-2xl text-red-300 flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* STEP 1: Opt-in Consent */}
+          {step === "opt_in" && (
+            <div className="space-y-6 max-w-xl mx-auto py-4">
+              <div className="bg-[#171717] border border-white/10 rounded-2xl p-6 space-y-3.5 shadow-lg">
+                <div className="flex items-center gap-2 text-white font-extrabold text-sm">
+                  <CloudCog className="w-4 h-4 text-[#e49366]" strokeWidth={2.25} />
+                  <span>Autonomous Multi-File Resolution Dispatch</span>
+                </div>
+                <p className="text-[#9e9e9e] leading-relaxed text-xs">
+                  The autonomous agent will analyze AST caller/dependency networks, load impacted
+                  files into context, generate code modifications, and deliver verified Pull Request diffs.
+                </p>
+
+                <label className="flex items-start gap-3 pt-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={optInConfirmed}
+                    onChange={(e) => setOptInConfirmed(e.target.checked)}
+                    className="mt-0.5 rounded bg-[#0e0e0e] border-white/30 text-[#e49366]"
+                  />
+                  <span className="text-white text-xs leading-relaxed font-semibold">
+                    Authorize autonomous agent to execute grounded code synthesis on local workspace.
+                  </span>
+                </label>
               </div>
 
-              <form onSubmit={handleSendChatMessage} className="mt-2 flex gap-2">
-                <input
-                  type="text"
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  placeholder="Ask a question about this issue or patch..."
-                  className="flex-1 bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-xs font-mono text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-600"
+              <div className="space-y-2">
+                <label className="text-xs text-white font-bold">Additional Directives (Optional):</label>
+                <textarea
+                  value={userNotes}
+                  onChange={(e) => setUserNotes(e.target.value)}
+                  placeholder="e.g., Ensure backward compatibility with existing tests and API contracts..."
+                  rows={3}
+                  className="w-full p-3.5 bg-[#0e0e0e] border border-white/15 rounded-2xl text-white placeholder-white/30 focus:outline-none focus:border-[#e49366]"
                 />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
                 <button
-                  type="submit"
-                  disabled={chatLoading || !chatMessage.trim()}
-                  className="px-4 py-2 bg-neutral-200 hover:bg-white disabled:opacity-50 text-neutral-900 text-xs font-mono font-semibold rounded cursor-pointer"
+                  type="button"
+                  onClick={onClose}
+                  className="btn-outline-white px-5 py-2.5 text-xs font-semibold cursor-pointer"
                 >
-                  Send
+                  Cancel
                 </button>
-              </form>
+                <button
+                  type="button"
+                  onClick={handleStartHandoff}
+                  disabled={!optInConfirmed || loading}
+                  className="btn-terracotta px-6 py-2.5 text-xs font-bold cursor-pointer flex items-center gap-2"
+                >
+                  <Bot className="w-4 h-4" />
+                  <span>Execute Agent</span>
+                </button>
+              </div>
             </div>
-          ) : (
-            /* Main Handoff Flow Tab */
-            <>
-              {/* Step 1: Opt-In Confirmation Card */}
-              {step === "opt_in" && (
-                <div className="space-y-3 bg-neutral-900 p-4 rounded border border-neutral-800 font-mono text-xs">
-                  <div>
-                    <h4 className="font-bold text-neutral-200">
-                      Human-in-the-Loop Confirmation Gate
-                    </h4>
-                    <p className="text-neutral-400 mt-1">
-                      Authorize the agent to provision a fork (lazy forking) and generate code modifications for Issue #{issue.number}.
-                    </p>
-                  </div>
+          )}
 
-                  {explanation && explanation.relevant_files && explanation.relevant_files.length > 0 && (
-                    <div className="p-2.5 bg-black rounded border border-neutral-800 space-y-1">
-                      <span className="text-[11px] text-neutral-500 font-bold">
-                        Target Files:
-                      </span>
-                      <div className="flex flex-wrap gap-1">
-                        {explanation.relevant_files.map((rf, idx) => (
-                          <span
-                            key={idx}
-                            className="px-1.5 py-0.5 text-[11px] bg-neutral-900 text-neutral-300 rounded border border-neutral-800"
-                          >
-                            {rf.file}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+          {/* STEP 2: Running Pipeline Animation */}
+          {(step === "synthesizing" || loading) && (
+            <div className="py-20 text-center space-y-4">
+              <div className="w-10 h-10 border-3 border-[#e49366] border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <div className="space-y-1">
+                <h4 className="font-extrabold text-white text-base">Agent Synthesizing Solution...</h4>
+                <p className="text-[#9e9e9e] text-xs">
+                  Evaluating AST dependencies, calculating imports, generating code patches.
+                </p>
+              </div>
+            </div>
+          )}
 
-                  <div className="space-y-1">
-                    <label className="text-neutral-400">
-                      Optional Developer Instructions:
-                    </label>
-                    <input
-                      type="text"
-                      value={userNotes}
-                      onChange={(e) => setUserNotes(e.target.value)}
-                      placeholder="e.g. Ensure backwards compatibility with existing schemas"
-                      className="w-full bg-black border border-neutral-800 rounded px-2.5 py-1.5 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-600"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="checkbox"
-                      id="optInCheck"
-                      checked={optInConfirmed}
-                      onChange={(e) => setOptInConfirmed(e.target.checked)}
-                      className="rounded border-neutral-700 cursor-pointer"
-                    />
-                    <label htmlFor="optInCheck" className="text-neutral-300 cursor-pointer">
-                      I confirm opt-in for automated agent handoff.
-                    </label>
-                  </div>
-
-                  {error && (
-                    <div className="p-2.5 bg-red-950/60 border border-red-800 text-red-300 text-xs">
-                      {error}
-                    </div>
-                  )}
-
-                  <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="px-3 py-1.5 text-neutral-400 hover:text-white cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleExecuteHandoff}
-                      disabled={!optInConfirmed}
-                      className="px-4 py-1.5 bg-neutral-100 hover:bg-white disabled:opacity-50 text-neutral-900 font-semibold rounded cursor-pointer"
-                    >
-                      Execute Handoff &rarr;
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Progress State */}
-              {(step === "fork" || step === "synthesizing" || step === "routing") && (
-                <div className="py-12 flex flex-col items-center justify-center space-y-2 text-center font-mono">
-                  <div className="text-sm font-bold text-neutral-200">
-                    {step === "fork" && "Provisioning fork..."}
-                    {step === "synthesizing" && "Synthesizing code patch..."}
-                    {step === "routing" && "Evaluating diff complexity..."}
-                  </div>
-                  <p className="text-xs text-neutral-500">
-                    Agent is processing Issue #{issue.number}.
-                  </p>
-                </div>
-              )}
-
-              {/* Resolution Completed View */}
-              {step === "completed" && result && (
-                <div className="space-y-4 font-mono text-xs">
+          {/* STEP 3: Completed Result */}
+          {step === "completed" && result && (
+            <div>
+              {activeTab === "resolution" && (
+                <div className="space-y-5">
                   {/* Status Banner */}
-                  <div className="p-3 rounded border flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-neutral-900 border-neutral-800">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-neutral-200">
-                          {result.decision === "pr"
-                            ? result.pr
-                              ? "Decision: Contained Fix (PR Published)"
-                              : "Decision: Contained Fix (Diff Ready for Review)"
-                            : "Decision: High Complexity (Implementation Plan)"}
+                  <div className="p-5 bg-[#171717] border border-white/10 rounded-2xl flex flex-wrap items-center justify-between gap-4 shadow-lg">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-[#e49366]" />
+                      <div>
+                        <span className="font-extrabold text-white text-sm">
+                          {result.decision === "pr" ? "Pull Request Synthesized" : "Plan Artifact Created"}
                         </span>
-                        <span className="text-neutral-500">
-                          ({result.diff_stats?.line_count || 0} lines changed, {result.diff_stats?.files_touched.length || 1} file(s))
-                        </span>
+                        <p className="text-xs text-[#9e9e9e] mt-0.5">{result.message}</p>
                       </div>
-                      <p className="text-neutral-400 text-[11px] mt-0.5">{result.message}</p>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={handleResetAndRerun}
-                        disabled={loading || publishingPR || rollingBack}
-                        className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded border border-neutral-700 cursor-pointer disabled:opacity-50"
-                      >
-                        Re-run
-                      </button>
+                    <div className="flex items-center gap-3">
+                      {result.decision === "pr" && !result.pr?.pr_url && (
+                        <button
+                          type="button"
+                          onClick={handlePublishPR}
+                          disabled={publishingPR}
+                          className="btn-terracotta px-4 py-2 text-xs flex items-center gap-1.5 cursor-pointer font-bold"
+                        >
+                          <GitPullRequest className="w-4 h-4" />
+                          <span>{publishingPR ? "Publishing..." : "Publish PR"}</span>
+                        </button>
+                      )}
 
-                      {result.decision === "pr" && result.pr && (
+                      {result.pr?.pr_url && (
                         <a
                           href={result.pr.pr_url}
                           target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1 bg-neutral-100 hover:bg-white text-neutral-900 font-bold rounded"
+                          rel="noreferrer"
+                          className="btn-white px-4 py-2 text-xs flex items-center gap-1.5 font-bold"
                         >
-                          View PR #{result.pr.pr_number} &rarr;
+                          <ExternalLink className="w-4 h-4" />
+                          <span>View PR #{result.pr.pr_number}</span>
                         </a>
                       )}
-                    </div>
-                  </div>
 
-                  {/* Plan Artifact Display (if High Complexity) */}
-                  {result.plan && (
-                    <div className="p-4 bg-neutral-900 border border-neutral-800 rounded space-y-3">
-                      <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
-                        <div>
-                          <h5 className="font-bold text-neutral-200">
-                            {result.plan.title}
-                          </h5>
-                          <span className="text-[11px] text-neutral-400">
-                            Risk: {result.plan.estimated_risk}
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={handleDownloadPlan}
-                          className="px-3 py-1 bg-neutral-200 hover:bg-white text-neutral-900 font-bold rounded cursor-pointer"
-                        >
-                          Download Plan (.md)
-                        </button>
-                      </div>
-
-                      <div className="text-neutral-300 leading-relaxed whitespace-pre-wrap">
-                        {result.plan.summary}
-                      </div>
-
-                      {result.plan.affected_modules && result.plan.affected_modules.length > 0 && (
-                        <div className="space-y-1">
-                          <span className="text-neutral-500 font-bold text-[11px]">
-                            Affected Modules:
-                          </span>
-                          <div className="flex flex-wrap gap-1">
-                            {result.plan.affected_modules.map((mod, mIdx) => (
-                              <span
-                                key={mIdx}
-                                className="px-1.5 py-0.5 bg-black text-neutral-300 rounded border border-neutral-800"
-                              >
-                                {mod}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-1">
-                        <span className="text-neutral-500 font-bold text-[11px]">
-                          Steps:
-                        </span>
-                        <div className="space-y-1">
-                          {result.plan.steps.map((st, sIdx) => (
-                            <div key={sIdx} className="text-neutral-300 flex items-start gap-2">
-                              <span className="text-neutral-500 font-bold shrink-0">{sIdx + 1}.</span>
-                              <span>{st}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {result.plan.quality_assurance && result.plan.quality_assurance.length > 0 && (
-                        <div className="space-y-1">
-                          <span className="text-neutral-500 font-bold text-[11px]">
-                            Quality Assurance:
-                          </span>
-                          <div className="space-y-0.5">
-                            {result.plan.quality_assurance.map((qa, qIdx) => (
-                              <div key={qIdx} className="text-neutral-400 flex items-center gap-1.5">
-                                <span>-</span>
-                                <span>{qa}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Unified Diff Viewer */}
-                  {result.decision === "pr" && result.diff && (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-neutral-400">
-                          Unified Diff Output
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleCopyDiff}
-                          className="px-2.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 cursor-pointer border border-neutral-700"
-                        >
-                          {copiedDiff ? "Copied" : "Copy Diff"}
-                        </button>
-                      </div>
-
-                      <div className="bg-black rounded border border-neutral-800 p-3 font-mono text-xs overflow-x-auto max-h-72">
-                        {result.diff.split("\n").map((line: string, lIdx: number) => {
-                          const isAdd = line.startsWith("+") && !line.startsWith("+++");
-                          const isDel = line.startsWith("-") && !line.startsWith("---");
-                          const isHeader = line.startsWith("@@") || line.startsWith("---") || line.startsWith("+++");
-                          return (
-                            <div
-                              key={lIdx}
-                              className={`leading-relaxed whitespace-pre ${
-                                isAdd
-                                  ? "text-emerald-400"
-                                  : isDel
-                                  ? "text-red-400"
-                                  : isHeader
-                                  ? "text-sky-400 font-bold"
-                                  : "text-neutral-400"
-                              }`}
-                            >
-                              {line}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Actions Footer */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between pt-2 border-t border-neutral-800 text-xs gap-2">
-                    <div className="text-neutral-500 truncate">
-                      Fork ref: {result.fork?.fork_ref || "None"}
-                    </div>
-
-                    {result.decision === "pr" && !result.pr ? (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={handleDiscardRollback}
-                          disabled={rollingBack || publishingPR}
-                          className="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-red-400 rounded cursor-pointer disabled:opacity-50"
-                        >
-                          {rollingBack ? "Rolling back..." : "Discard & Rollback"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={handleConfirmPublishPR}
-                          disabled={publishingPR || rollingBack}
-                          className="px-4 py-1.5 bg-neutral-100 hover:bg-white text-neutral-900 font-bold rounded cursor-pointer disabled:opacity-50"
-                        >
-                          {publishingPR ? "Publishing PR..." : "Confirm & Publish PR"}
-                        </button>
-                      </div>
-                    ) : (
                       <button
                         type="button"
-                        onClick={onClose}
-                        className="px-4 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded cursor-pointer"
+                        onClick={handleRollback}
+                        disabled={rollingBack}
+                        className="btn-outline-white px-3.5 py-2 text-xs cursor-pointer flex items-center gap-1.5"
+                        title="Rollback handoff changes"
                       >
-                        Done
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Reset</span>
                       </button>
-                    )}
+                    </div>
                   </div>
+
+                  {/* Diff Viewer */}
+                  {result.diff && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-white font-bold text-xs uppercase tracking-wider">
+                          Code Patch Preview ({result.diff_stats?.files_touched?.length || 1} files)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={copyDiff}
+                          className="btn-white px-3 py-1 text-xs cursor-pointer flex items-center gap-1.5"
+                        >
+                          {copiedDiff ? <Check className="w-3.5 h-3.5 text-[#e49366]" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedDiff ? "Copied" : "Copy Diff"}</span>
+                        </button>
+                      </div>
+
+                      <div className="bg-[#0e0e0e] border border-white/15 rounded-2xl p-4 overflow-x-auto max-h-80 text-xs font-code leading-relaxed text-white">
+                        <pre>{result.diff}</pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Plan Artifact */}
+                  {result.plan && (
+                    <div className="space-y-2">
+                      <span className="text-white font-bold text-xs uppercase tracking-wider">
+                        Architectural Plan: {result.plan.title}
+                      </span>
+                      <div className="bg-[#0e0e0e] border border-white/15 rounded-2xl p-5 text-xs font-code leading-relaxed text-white whitespace-pre-wrap">
+                        {result.plan.markdown_content || result.plan.summary}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Error State */}
-              {step === "error" && (
-                <div className="p-4 bg-red-950/60 border border-red-800 rounded space-y-2 text-xs font-mono">
-                  <h4 className="font-bold text-red-300">Agent Handoff Error</h4>
-                  <p className="text-neutral-300">{error}</p>
-                  <button
-                    type="button"
-                    onClick={() => setStep("opt_in")}
-                    className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white rounded cursor-pointer"
-                  >
-                    Retry
-                  </button>
+              {/* TAB 2: Agent Chat */}
+              {activeTab === "chat" && (
+                <div className="space-y-4">
+                  <div className="bg-[#0e0e0e] border border-white/15 rounded-2xl p-4 max-h-80 overflow-y-auto space-y-3">
+                    {chatHistory.map((msg, i) => (
+                      <div
+                        key={i}
+                        className={`p-3.5 rounded-2xl text-xs leading-relaxed ${
+                          msg.role === "agent"
+                            ? "bg-[#171717] border border-white/10 text-white"
+                            : "bg-[#e49366] text-[#0e0e0e] font-semibold ml-8 shadow-sm"
+                        }`}
+                      >
+                        <div className="text-[10px] opacity-75 font-bold mb-1 uppercase tracking-wider">
+                          {msg.role === "agent" ? "FLUX Agent" : "You"}
+                        </div>
+                        <div className="whitespace-pre-wrap">{msg.text}</div>
+                      </div>
+                    ))}
+                    {chatLoading && (
+                      <div className="text-[#9e9e9e] text-xs italic">Agent is thinking...</div>
+                    )}
+                  </div>
+
+                  <form onSubmit={handleSendMessage} className="flex gap-3">
+                    <input
+                      type="text"
+                      value={chatMessage}
+                      onChange={(e) => setChatMessage(e.target.value)}
+                      placeholder="Ask the agent about this code patch or give instructions..."
+                      className="flex-1 px-4 py-3 bg-[#0e0e0e] border border-white/15 rounded-2xl text-white placeholder-white/30 text-xs focus:outline-none focus:border-[#e49366]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!chatMessage.trim() || chatLoading}
+                      className="btn-terracotta px-5 py-3 text-xs font-bold cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Send</span>
+                    </button>
+                  </form>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>

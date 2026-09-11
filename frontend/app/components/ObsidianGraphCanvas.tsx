@@ -1,15 +1,30 @@
 "use client";
 
 /**
- * Obsidian-Style Force-Directed Dependency Graph Explorer Canvas.
- * Renders an interactive 2D physics graph displaying source code files (nodes)
- * and import dependencies (edges) with smooth pan, zoom, dragging, directional flow arrows,
- * clustering filters, search auto-centering, and deep node inspection.
+ * ObsidianGraphCanvas.tsx
+ * Akaru Prestige Edition: AST Dependency Network Explorer.
+ * Features:
+ * - Deterministic, static node layout (no uncontrolled drift).
+ * - Continuous high-frequency network micro-animations (warm terracotta pulses, radar ripples, laser flow arrows).
+ * - Akaru color schema: Warm Terracotta (#e49366), gallery near-black (#0e0e0e), crisp white (#ffffff).
+ * - Interactive hover pop-up card and deep node inspection.
  */
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { GraphResponse, GraphNode, GraphEdge } from "../lib/api";
 import NodeInspectorDrawer from "./NodeInspectorDrawer";
+import {
+  Search,
+  Maximize2,
+  RotateCcw,
+  Plus,
+  Minus,
+  Filter,
+  Layers,
+  ArrowRight,
+  Activity,
+  FileCode,
+} from "lucide-react";
 
 interface ObsidianGraphCanvasProps {
   owner: string;
@@ -32,8 +47,6 @@ interface SimNode {
   rawNode: GraphNode;
   x: number;
   y: number;
-  vx: number;
-  vy: number;
   radius: number;
   isDragging?: boolean;
 }
@@ -41,18 +54,19 @@ interface SimNode {
 interface SimEdge {
   source: string;
   target: string;
+  speed: number;
+  pulsePhase: number;
 }
 
-// Vibrant community cluster palette for visual grouping
-const CLUSTER_COLORS = [
-  "#10b981", // Emerald
-  "#38bdf8", // Sky Blue
-  "#a855f7", // Violet
-  "#f59e0b", // Amber
-  "#ec4899", // Pink
-  "#06b6d4", // Cyan
-  "#84cc16", // Lime
-  "#f97316", // Orange
+// Akaru-Harmonized Palette (Warm Terracotta, Gold, Sky Azure, Pure White, Mint - Zero Purple)
+const AKARU_CLUSTERS = [
+  { color: "#e49366", name: "Terracotta Primary" },
+  { color: "#ffffff", name: "Pure White" },
+  { color: "#f59e0b", name: "Warm Gold" },
+  { color: "#38bdf8", name: "Sky Azure" },
+  { color: "#10b981", name: "Mint Emerald" },
+  { color: "#fb7185", name: "Coral Rose" },
+  { color: "#9e9e9e", name: "Neutral Gray" },
 ];
 
 export default function ObsidianGraphCanvas({
@@ -64,10 +78,11 @@ export default function ObsidianGraphCanvas({
 }: ObsidianGraphCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Viewport transforms: pan and zoom
+  // Viewport transforms
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [hoveredNode, setHoveredNode] = useState<SimNode | null>(null);
+  const [hoverScreenPos, setHoverScreenPos] = useState<{ x: number; y: number } | null>(null);
   const [selectedNode, setSelectedNode] = useState<SimNode | null>(null);
 
   // Filtering & Search states
@@ -75,44 +90,53 @@ export default function ObsidianGraphCanvas({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedClusterFilter, setSelectedClusterFilter] = useState<number | "all">("all");
   const [minDegreeFilter, setMinDegreeFilter] = useState<number>(0);
-  const [isPhysicsFrozen, setIsPhysicsFrozen] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
   const mouseDownPosRef = useRef({ x: 0, y: 0 });
 
-  // Interaction tracking refs
+  // Simulation Refs
   const isPanningRef = useRef(false);
   const startPanRef = useRef({ x: 0, y: 0 });
   const draggedNodeRef = useRef<SimNode | null>(null);
   const nodesRef = useRef<SimNode[]>([]);
   const edgesRef = useRef<SimEdge[]>([]);
   const animFrameIdRef = useRef<number | null>(null);
+  const tickCounterRef = useRef(0);
 
-  // Color mapping based on cluster or language
+  // Color helper
   const getNodeColor = useCallback((node: SimNode): string => {
     if (node.cluster !== undefined && node.cluster >= 0) {
-      return CLUSTER_COLORS[node.cluster % CLUSTER_COLORS.length];
+      return AKARU_CLUSTERS[node.cluster % AKARU_CLUSTERS.length].color;
     }
     switch (node.language.toLowerCase()) {
       case "python":
-        return "#10b981";
+        return "#e49366";
       case "javascript":
       case "typescript":
+        return "#ffffff";
+      case "go":
         return "#38bdf8";
+      case "rust":
+        return "#f59e0b";
       default:
-        return "#a855f7";
+        return "#9e9e9e";
     }
   }, []);
 
-  // Initialize simulation data whenever graph prop changes
+  // Compute Static, Balanced Layout Once When Graph Prop Changes
   useEffect(() => {
-    const width = 800;
-    const height = 500;
+    const width = 940;
+    const height = 580;
+    const totalNodes = Math.max(graph.nodes.length, 1);
 
     const simNodes: SimNode[] = graph.nodes.map((n, idx) => {
-      const angle = (idx / Math.max(graph.nodes.length, 1)) * 2 * Math.PI;
-      const radiusDist = 140 + Math.random() * 80;
-      const baseRadius = 6;
-      const bonus = Math.min(n.in_degree * 2.5 + n.centrality * 14, 18);
+      const clusterOffset = (n.cluster || 0) * (Math.PI / 3.5);
+      const angle = (idx / totalNodes) * 2 * Math.PI + clusterOffset;
+      const baseDist = 175;
+      const clusterScatter = ((idx % 4) - 1.5) * 40;
+      const radiusDist = baseDist + clusterScatter;
+
+      const baseRadius = 7.5;
+      const bonus = Math.min(n.in_degree * 2.2 + n.centrality * 14, 16);
 
       return {
         id: n.id,
@@ -125,17 +149,61 @@ export default function ObsidianGraphCanvas({
         cluster: n.cluster,
         symbolsCount: n.symbols ? n.symbols.length : 0,
         rawNode: n,
-        x: width / 2 + Math.cos(angle) * radiusDist + (Math.random() - 0.5) * 40,
-        y: height / 2 + Math.sin(angle) * radiusDist + (Math.random() - 0.5) * 40,
-        vx: 0,
-        vy: 0,
+        x: width / 2 + Math.cos(angle) * radiusDist,
+        y: height / 2 + Math.sin(angle) * radiusDist,
         radius: baseRadius + bonus,
       };
     });
 
-    const simEdges: SimEdge[] = graph.edges.map((e) => ({
+    // Run quick relaxation passes (70 iterations) then FREEZE STATICALLY
+    const nodeMap = new Map<string, SimNode>();
+    simNodes.forEach((n) => nodeMap.set(n.id, n));
+
+    for (let iter = 0; iter < 70; iter++) {
+      for (let i = 0; i < simNodes.length; i++) {
+        for (let j = i + 1; j < simNodes.length; j++) {
+          const a = simNodes[i];
+          const b = simNodes[j];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const distSq = dx * dx + dy * dy || 1;
+          const dist = Math.sqrt(distSq);
+          if (dist < 125) {
+            const force = (125 - dist) * 0.08;
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            a.x -= fx;
+            a.y -= fy;
+            b.x += fx;
+            b.y += fy;
+          }
+        }
+      }
+
+      for (const e of graph.edges) {
+        const src = nodeMap.get(e.source);
+        const tgt = nodeMap.get(e.target);
+        if (!src || !tgt) continue;
+        const dx = tgt.x - src.x;
+        const dy = tgt.y - src.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        if (dist > 165) {
+          const force = (dist - 165) * 0.02;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          src.x += fx;
+          src.y += fy;
+          tgt.x -= fx;
+          tgt.y -= fy;
+        }
+      }
+    }
+
+    const simEdges: SimEdge[] = graph.edges.map((e, idx) => ({
       source: e.source,
       target: e.target,
+      speed: 0.008 + (idx % 3) * 0.004,
+      pulsePhase: (idx * 0.21) % 1,
     }));
 
     nodesRef.current = simNodes;
@@ -165,14 +233,12 @@ export default function ObsidianGraphCanvas({
     setSelectedNode(target);
   }, []);
 
-  // Handle external focus triggers (e.g. from Phase 3 Understanding cards)
   useEffect(() => {
     if (focusedNodeId) {
       centerOnNode(focusedNodeId);
     }
   }, [focusedNodeId, centerOnNode]);
 
-  // Set of unique clusters available in graph
   const availableClusters = useMemo(() => {
     const set = new Set<number>();
     graph.nodes.forEach((n) => {
@@ -181,7 +247,6 @@ export default function ObsidianGraphCanvas({
     return Array.from(set).sort((a, b) => a - b);
   }, [graph.nodes]);
 
-  // Set of node IDs directly connected to active (hovered or selected) node (for 1-hop neighborhood)
   const connectedIds = useMemo(() => {
     const target = hoveredNode || selectedNode;
     if (!target) return new Set<string>();
@@ -194,7 +259,6 @@ export default function ObsidianGraphCanvas({
     return set;
   }, [hoveredNode, selectedNode]);
 
-  // Search filtered results
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase();
@@ -203,7 +267,6 @@ export default function ObsidianGraphCanvas({
       .slice(0, 8);
   }, [graph.nodes, searchQuery]);
 
-  // Auto-fit all nodes to screen
   const handleZoomToFit = () => {
     const nodes = nodesRef.current;
     const canvas = canvasRef.current;
@@ -222,13 +285,13 @@ export default function ObsidianGraphCanvas({
       if (n.y > maxY) maxY = n.y;
     });
 
-    const padding = 60;
+    const padding = 80;
     const graphWidth = maxX - minX + padding * 2;
     const graphHeight = maxY - minY + padding * 2;
 
     const scaleX = rect.width / graphWidth;
     const scaleY = rect.height / graphHeight;
-    const newZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.35), 2.0);
+    const newZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.4), 1.6);
 
     const midX = (minX + maxX) / 2;
     const midY = (minY + maxY) / 2;
@@ -240,7 +303,7 @@ export default function ObsidianGraphCanvas({
     });
   };
 
-  // Main physics simulation and rendering loop
+  // Continuous Canvas Rendering Loop with Active Network Micro-Animations
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -249,95 +312,16 @@ export default function ObsidianGraphCanvas({
 
     let isRunning = true;
 
-    const tickPhysics = () => {
-      if (isPhysicsFrozen) return;
-
-      const nodes = nodesRef.current;
-      const edges = edgesRef.current;
-      const width = canvas.width / (window.devicePixelRatio || 1);
-      const height = canvas.height / (window.devicePixelRatio || 1);
-      const centerX = width / 2;
-      const centerY = height / 2;
-
-      // 1. Coulomb Repulsion
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const a = nodes[i];
-          const b = nodes[j];
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const distSq = dx * dx + dy * dy || 1;
-          const dist = Math.sqrt(distSq);
-
-          if (dist < 380) {
-            const force = 2200 / distSq;
-            const fx = (dx / dist) * force;
-            const fy = (dy / dist) * force;
-            if (!a.isDragging) {
-              a.vx -= fx;
-              a.vy -= fy;
-            }
-            if (!b.isDragging) {
-              b.vx += fx;
-              b.vy += fy;
-            }
-          }
-        }
-      }
-
-      // 2. Hooke's Spring Attraction along edges
-      const nodeMap = new Map<string, SimNode>();
-      nodes.forEach((n) => nodeMap.set(n.id, n));
-
-      const springLength = 90;
-      const springK = 0.045;
-      for (const edge of edges) {
-        const source = nodeMap.get(edge.source);
-        const target = nodeMap.get(edge.target);
-        if (!source || !target) continue;
-
-        const dx = target.x - source.x;
-        const dy = target.y - source.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const displacement = dist - springLength;
-        const force = displacement * springK;
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-
-        if (!source.isDragging) {
-          source.vx += fx;
-          source.vy += fy;
-        }
-        if (!target.isDragging) {
-          target.vx -= fx;
-          target.vy -= fy;
-        }
-      }
-
-      // 3. Centering force & velocity damping
-      const damping = 0.82;
-      const centerForce = 0.0035;
-      for (const node of nodes) {
-        if (node.isDragging) continue;
-
-        node.vx += (centerX - node.x) * centerForce;
-        node.vy += (centerY - node.y) * centerForce;
-
-        node.vx *= damping;
-        node.vy *= damping;
-
-        node.x += node.vx;
-        node.y += node.vy;
-      }
-    };
-
     const render = () => {
+      tickCounterRef.current += 1;
+      const tTime = tickCounterRef.current * 0.02;
+
       const dpr = window.devicePixelRatio || 1;
       ctx.save();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.scale(dpr, dpr);
 
-      // Viewport transform (in CSS pixels)
+      // Viewport transform
       ctx.translate(pan.x, pan.y);
       ctx.scale(zoom, zoom);
 
@@ -348,13 +332,12 @@ export default function ObsidianGraphCanvas({
 
       const activeTarget = hoveredNode || selectedNode;
 
-      // Draw Edges with Directional Flow Arrows
+      // 1. Draw thin ink connections first, then animate a restrained signal over them.
       for (const edge of edges) {
         const src = nodeMap.get(edge.source);
         const tgt = nodeMap.get(edge.target);
         if (!src || !tgt) continue;
 
-        // Check if filtered by cluster or degree
         const srcPass =
           (selectedClusterFilter === "all" || src.cluster === selectedClusterFilter) &&
           src.in_degree + src.out_degree >= minDegreeFilter;
@@ -368,112 +351,145 @@ export default function ObsidianGraphCanvas({
         const isInbound = activeTarget && tgt.id === activeTarget.id;
         const isHighlighted = isOutbound || isInbound;
 
+        // Base connection line
         ctx.beginPath();
         ctx.moveTo(src.x, src.y);
         ctx.lineTo(tgt.x, tgt.y);
 
         if (isOutbound) {
-          // Outgoing dependency: cyan/sky
-          ctx.strokeStyle = "rgba(56, 189, 248, 0.9)";
-          ctx.lineWidth = 2.2 / zoom;
+          ctx.strokeStyle = "rgba(223, 125, 76, 0.8)";
+          ctx.lineWidth = 1.6 / zoom;
         } else if (isInbound) {
-          // Incoming dependent: emerald
-          ctx.strokeStyle = "rgba(16, 185, 129, 0.9)";
-          ctx.lineWidth = 2.2 / zoom;
+          ctx.strokeStyle = "rgba(23, 24, 23, 0.72)";
+          ctx.lineWidth = 1.6 / zoom;
         } else if (activeTarget) {
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
-          ctx.lineWidth = 0.8 / zoom;
+          ctx.strokeStyle = "rgba(23, 24, 23, 0.045)";
+          ctx.lineWidth = 0.7 / zoom;
         } else {
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
-          ctx.lineWidth = 1 / zoom;
+          ctx.strokeStyle = "rgba(23, 24, 23, 0.16)";
+          ctx.lineWidth = 0.85 / zoom;
         }
         ctx.stroke();
 
-        // Draw directional arrowhead towards target
+        // 2. High-Frequency Micro-Animation: Data Pulse travelling on the wire
         const dx = tgt.x - src.x;
         const dy = tgt.y - src.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist > 35) {
+          const phase = (tTime * 0.8 + edge.pulsePhase) % 1;
+          const px = src.x + dx * phase;
+          const py = src.y + dy * phase;
+
+          ctx.beginPath();
+          ctx.arc(px, py, (isHighlighted ? 2.8 : 1.7) / zoom, 0, 2 * Math.PI);
+          ctx.fillStyle = isOutbound
+            ? "#df7d4c"
+            : isInbound
+            ? "#171817"
+            : isHighlighted
+            ? "#f59e0b"
+            : "rgba(223, 125, 76, 0.86)";
+          ctx.fill();
+
+          if (isHighlighted) {
+            ctx.beginPath();
+            ctx.arc(px, py, 6.5 / zoom, 0, 2 * Math.PI);
+            ctx.fillStyle = isOutbound ? "rgba(223, 125, 76, 0.18)" : "rgba(23, 24, 23, 0.12)";
+            ctx.fill();
+          }
+        }
+
+        // 3. Directional Arrowhead
         if (dist > tgt.radius + 15) {
-          // Place arrow just before hitting target node radius
-          const offsetDist = dist - tgt.radius - 4;
+          const offsetDist = dist - tgt.radius - 3;
           const arrowX = src.x + (dx / dist) * offsetDist;
           const arrowY = src.y + (dy / dist) * offsetDist;
           const angle = Math.atan2(dy, dx);
-          const arrowLength = (isHighlighted ? 7 : 5) / zoom;
+          const arrowLength = (isHighlighted ? 7.0 : 5.0) / zoom;
 
           ctx.save();
           ctx.translate(arrowX, arrowY);
           ctx.rotate(angle);
           ctx.beginPath();
           ctx.moveTo(0, 0);
-          ctx.lineTo(-arrowLength, -arrowLength * 0.5);
-          ctx.lineTo(-arrowLength, arrowLength * 0.5);
+          ctx.lineTo(-arrowLength, -arrowLength * 0.45);
+          ctx.lineTo(-arrowLength, arrowLength * 0.45);
           ctx.closePath();
-          ctx.fillStyle = isOutbound
-            ? "rgba(56, 189, 248, 0.95)"
-            : isInbound
-            ? "rgba(16, 185, 129, 0.95)"
-            : "rgba(255, 255, 255, 0.25)";
+          ctx.fillStyle = isOutbound ? "#df7d4c" : isInbound ? "#171817" : "rgba(23, 24, 23, 0.3)";
           ctx.fill();
           ctx.restore();
         }
       }
 
-      // Draw Nodes
+      // 4. Draw compact module tiles with a small live core and a readable label.
       for (const node of nodes) {
-        // Filter evaluation
         const clusterMatch =
           selectedClusterFilter === "all" || node.cluster === selectedClusterFilter;
         const degreeMatch = node.in_degree + node.out_degree >= minDegreeFilter;
         const isFilterActive = selectedClusterFilter !== "all" || minDegreeFilter > 0;
 
         if (isFilterActive && (!clusterMatch || !degreeMatch)) {
-          // Dim completely if filtered out
           continue;
         }
 
         const isConnected = !activeTarget || connectedIds.has(node.id);
         const isFocused = activeTarget && activeTarget.id === node.id;
-        const color = getNodeColor(node);
+        const isHovered = hoveredNode && hoveredNode.id === node.id;
+        const nodeColor = getNodeColor(node);
 
         ctx.save();
 
-        // Glowing outer aura for focused or high centrality nodes
-        if (isFocused || node.in_degree > 2) {
+        // Animated radar beacon around hub nodes
+        if (node.in_degree >= 2 || isFocused) {
+          const ripplePhase = (tTime * 0.7 + (node.cluster || 0)) % 1;
+          const rippleRadius = node.radius + ripplePhase * (isFocused ? 18 : 12);
+          const rippleOpacity = (1 - ripplePhase) * (isFocused ? 0.7 : 0.35);
+
           ctx.beginPath();
-          ctx.arc(node.x, node.y, node.radius + (isFocused ? 7 : 3.5), 0, 2 * Math.PI);
-          ctx.fillStyle = isFocused
-            ? "rgba(56, 189, 248, 0.4)"
-            : "rgba(16, 185, 129, 0.18)";
+          ctx.arc(node.x, node.y, rippleRadius, 0, 2 * Math.PI);
+          ctx.strokeStyle = isFocused
+            ? `rgba(223, 125, 76, ${rippleOpacity})`
+            : `rgba(23, 24, 23, ${rippleOpacity * 0.65})`;
+          ctx.lineWidth = 1.2 / zoom;
+          ctx.stroke();
+        }
+
+        // Outer aura glow
+        if (isFocused || isHovered) {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, node.radius + 9, 0, 2 * Math.PI);
+          ctx.fillStyle = "rgba(223, 125, 76, 0.16)";
           ctx.fill();
         }
 
-        // Inner Circle
+        // Soft rounded-square module tile, rotated slightly to separate nodes from points.
+        const tileSize = node.radius * 1.7;
+        ctx.save();
+        ctx.translate(node.x, node.y);
+        ctx.rotate(Math.PI / 4);
         ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius, 0, 2 * Math.PI);
-        ctx.fillStyle = isConnected ? color : "rgba(75, 85, 99, 0.25)";
+        ctx.roundRect(-tileSize / 2, -tileSize / 2, tileSize, tileSize, 4 / zoom);
+        ctx.fillStyle = isConnected ? "#fffefa" : "rgba(255, 254, 250, 0.6)";
+        ctx.fill();
+        ctx.strokeStyle = isFocused ? "#171817" : isConnected ? nodeColor : "rgba(23, 24, 23, 0.22)";
+        ctx.lineWidth = (isFocused ? 2.4 : isHovered ? 2 : 1.2) / zoom;
+        ctx.stroke();
+        ctx.restore();
+
+        // Live center marker
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, Math.max(node.radius * 0.28, 2.5), 0, 2 * Math.PI);
+        ctx.fillStyle = isConnected ? nodeColor : "rgba(23, 24, 23, 0.26)";
         ctx.fill();
 
-        // Border ring
-        ctx.strokeStyle = isFocused
-          ? "#ffffff"
-          : isConnected
-          ? "rgba(255, 255, 255, 0.45)"
-          : "rgba(255, 255, 255, 0.08)";
-        ctx.lineWidth = (isFocused ? 2.5 : 1) / zoom;
-        ctx.stroke();
-
         // Node Label
-        const showLabel = isFocused || isConnected || zoom >= 0.95 || node.in_degree > 1;
+        const showLabel = isFocused || isHovered || isConnected || zoom >= 0.95 || node.in_degree > 1;
         if (showLabel) {
-          ctx.font = `${Math.max(10 / zoom, 9)}px sans-serif`;
+          ctx.font = `600 ${Math.max(10 / zoom, 9)}px var(--font-display, sans-serif)`;
           ctx.textAlign = "center";
-          ctx.fillStyle = isFocused
-            ? "#ffffff"
-            : isConnected
-            ? "rgba(229, 231, 235, 0.9)"
-            : "rgba(107, 114, 128, 0.35)";
-          ctx.fillText(node.label, node.x, node.y + node.radius + 12 / zoom);
+          ctx.fillStyle = isFocused || isHovered ? "#171817" : isConnected ? "#4e4d49" : "rgba(78, 77, 73, 0.38)";
+          ctx.fillText(node.label, node.x, node.y + node.radius + 13 / zoom);
         }
 
         ctx.restore();
@@ -482,7 +498,6 @@ export default function ObsidianGraphCanvas({
       ctx.restore();
 
       if (isRunning) {
-        tickPhysics();
         animFrameIdRef.current = requestAnimationFrame(render);
       }
     };
@@ -503,11 +518,9 @@ export default function ObsidianGraphCanvas({
     connectedIds,
     selectedClusterFilter,
     minDegreeFilter,
-    isPhysicsFrozen,
     getNodeColor,
   ]);
 
-  // Adjust canvas size to parent container with DPR scaling
   useEffect(() => {
     const handleResize = () => {
       const canvas = canvasRef.current;
@@ -515,9 +528,9 @@ export default function ObsidianGraphCanvas({
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.parentElement.getBoundingClientRect();
       canvas.width = rect.width * dpr;
-      canvas.height = 540 * dpr;
+      canvas.height = 580 * dpr;
       canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `540px`;
+      canvas.style.height = `580px`;
     };
 
     handleResize();
@@ -525,7 +538,6 @@ export default function ObsidianGraphCanvas({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Transform screen coordinate to canvas coordinate
   const screenToCanvas = (screenX: number, screenY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -535,12 +547,10 @@ export default function ObsidianGraphCanvas({
     return { x, y };
   };
 
-  // Find node under coordinate with generous hit radius and filter awareness
   const findNodeAt = (canvasX: number, canvasY: number): SimNode | null => {
     const nodes = nodesRef.current;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const n = nodes[i];
-      // Skip nodes hidden by active filters
       const clusterMatch =
         selectedClusterFilter === "all" || n.cluster === selectedClusterFilter;
       const degreeMatch = n.in_degree + n.out_degree >= minDegreeFilter;
@@ -550,7 +560,6 @@ export default function ObsidianGraphCanvas({
 
       const dx = n.x - canvasX;
       const dy = n.y - canvasY;
-      // Generous hit radius: node radius + 12, minimum 18px click target
       const hitRadius = Math.max(n.radius + 12, 18);
       if (dx * dx + dy * dy <= hitRadius * hitRadius) {
         return n;
@@ -559,7 +568,6 @@ export default function ObsidianGraphCanvas({
     return null;
   };
 
-  // Mouse Handlers for Pan, Drag, Hover, Click
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     const { x, y } = screenToCanvas(e.clientX, e.clientY);
@@ -583,8 +591,6 @@ export default function ObsidianGraphCanvas({
     if (draggedNodeRef.current) {
       draggedNodeRef.current.x = x;
       draggedNodeRef.current.y = y;
-      draggedNodeRef.current.vx = 0;
-      draggedNodeRef.current.vy = 0;
     } else if (isPanningRef.current) {
       setPan({
         x: e.clientX - startPanRef.current.x,
@@ -593,6 +599,18 @@ export default function ObsidianGraphCanvas({
     } else {
       const node = findNodeAt(x, y);
       setHoveredNode(node);
+      if (node) {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          setHoverScreenPos({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+          });
+        }
+      } else {
+        setHoverScreenPos(null);
+      }
     }
   };
 
@@ -602,7 +620,6 @@ export default function ObsidianGraphCanvas({
       e.clientY - mouseDownPosRef.current.y
     );
 
-    // If mouse barely moved (< 6px), register as explicit click
     if (distMoved < 6) {
       const { x, y } = screenToCanvas(e.clientX, e.clientY);
       const clicked = findNodeAt(x, y);
@@ -619,12 +636,6 @@ export default function ObsidianGraphCanvas({
     setIsInteracting(false);
   };
 
-  const getCanvasCursor = () => {
-    if (isInteracting) return "cursor-grabbing";
-    if (hoveredNode) return "cursor-pointer";
-    return "cursor-grab";
-  };
-
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.12 : 0.88;
@@ -637,35 +648,40 @@ export default function ObsidianGraphCanvas({
   };
 
   return (
-    <div className="border border-neutral-800 bg-neutral-950 rounded-xl overflow-hidden shadow-2xl space-y-0 relative">
-      {/* Top Toolbar: Metrics, Controls, Filters & Search */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-neutral-800/80 bg-neutral-900/50 text-xs">
+    <div className="graph-shell akaru-card overflow-hidden shadow-2xl relative select-none">
+      {/* Top Controls Toolbar */}
+      <div className="graph-toolbar flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/10 bg-[#161616] text-xs">
         {/* Left: Summary Metrics & Search */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span className="font-semibold text-neutral-200 uppercase tracking-wider text-[11px]">
-            Graph Explorer
-          </span>
-          <span className="text-neutral-500">|</span>
-          <span className="text-neutral-400">{graph.metrics.total_nodes} files</span>
-          <span className="text-neutral-600">&bull;</span>
-          <span className="text-neutral-400">{graph.metrics.total_edges} dependencies</span>
+        <div className="flex flex-wrap items-center gap-3.5">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#e49366] animate-pulse"></span>
+            <span className="font-bold text-white uppercase tracking-wider text-[11px]">
+              Dependency Network
+            </span>
+          </div>
+          <span className="text-white/20">|</span>
+          <span className="text-white font-medium">{graph.metrics.total_nodes} modules</span>
+          <span className="text-white/20">&bull;</span>
+          <span className="text-white font-medium">{graph.metrics.total_edges} connections</span>
 
           {/* Quick Node Search */}
           <div className="relative ml-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setIsSearchOpen(true);
-              }}
-              onFocus={() => setIsSearchOpen(true)}
-              placeholder="Search file or symbol..."
-              className="px-2.5 py-1 bg-neutral-950 border border-neutral-700/80 rounded text-neutral-200 placeholder-neutral-500 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 w-44 font-mono"
-            />
+            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-[#0e0e0e] border border-white/15 rounded-xl focus-within:border-[#e49366] transition-all">
+              <Search className="w-3.5 h-3.5 text-[#e49366]" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => setIsSearchOpen(true)}
+                placeholder="Find node or module..."
+                className="bg-transparent text-white placeholder-white/40 text-xs focus:outline-none w-44 font-code"
+              />
+            </div>
             {isSearchOpen && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 mt-1 w-64 bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl z-30 py-1 max-h-48 overflow-y-auto">
+              <div className="absolute top-full left-0 mt-2 w-72 akaru-dropdown shadow-2xl z-40 py-2 max-h-52 overflow-y-auto">
                 {searchResults.map((res) => (
                   <button
                     key={res.id}
@@ -675,10 +691,10 @@ export default function ObsidianGraphCanvas({
                       setIsSearchOpen(false);
                       setSearchQuery("");
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-neutral-800 text-xs font-mono text-neutral-300 hover:text-white flex items-center justify-between group cursor-pointer"
+                    className="w-full text-left px-4 py-2 hover:bg-[#222222] text-xs font-code text-white hover:text-[#e49366] flex items-center justify-between group cursor-pointer"
                   >
                     <span className="truncate">{res.id}</span>
-                    <span className="text-[10px] text-neutral-500 group-hover:text-emerald-400">
+                    <span className="text-[10px] text-white/50 group-hover:text-[#e49366]">
                       deg:{res.in_degree + res.out_degree}
                     </span>
                   </button>
@@ -688,8 +704,8 @@ export default function ObsidianGraphCanvas({
           </div>
         </div>
 
-        {/* Right: Readability Filters & Viewport Controls */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Right: Viewport & Declutter Controls */}
+        <div className="flex flex-wrap items-center gap-2.5">
           {/* Cluster Filter */}
           {availableClusters.length > 1 && (
             <select
@@ -699,8 +715,7 @@ export default function ObsidianGraphCanvas({
                   e.target.value === "all" ? "all" : parseInt(e.target.value, 10)
                 )
               }
-              className="px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 focus:outline-none cursor-pointer"
-              title="Filter by Community Cluster"
+              className="px-3.5 py-1.5 bg-[#0e0e0e] border border-white/20 rounded-xl text-xs text-white focus:outline-none cursor-pointer hover:border-[#e49366]"
             >
               <option value="all">All Clusters ({availableClusters.length})</option>
               {availableClusters.map((c) => (
@@ -711,79 +726,69 @@ export default function ObsidianGraphCanvas({
             </select>
           )}
 
-          {/* Min Degree Filter (Declutter large graphs) */}
+          {/* Min Degree Filter */}
           <button
             type="button"
             onClick={() => setMinDegreeFilter((prev) => (prev === 0 ? 1 : prev === 1 ? 2 : 0))}
-            className={`px-2.5 py-1 rounded text-xs transition-colors cursor-pointer border ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
               minDegreeFilter > 0
-                ? "bg-emerald-950/80 border-emerald-700 text-emerald-300 font-medium"
-                : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
+                ? "bg-[#e49366] text-[#0e0e0e] border-[#e49366]"
+                : "bg-white text-[#0e0e0e] border-white hover:bg-[#f2f2f2]"
             }`}
-            title="Toggle degree threshold to hide isolated leaves"
           >
-            {minDegreeFilter === 0
-              ? "All Nodes"
-              : minDegreeFilter === 1
-              ? "Connected (≥1)"
-              : "Hubs Only (≥2)"}
+            <Filter className="w-3.5 h-3.5" />
+            <span>
+              {minDegreeFilter === 0
+                ? "All Nodes"
+                : minDegreeFilter === 1
+                ? "Connected (≥1)"
+                : "Hubs (≥2)"}
+            </span>
           </button>
 
-          {/* Freeze Physics Toggle */}
-          <button
-            type="button"
-            onClick={() => setIsPhysicsFrozen((f) => !f)}
-            className={`px-2.5 py-1 rounded text-xs transition-colors cursor-pointer border ${
-              isPhysicsFrozen
-                ? "bg-amber-950/80 border-amber-700 text-amber-300 font-medium"
-                : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
-            }`}
-            title={isPhysicsFrozen ? "Resume particle movement" : "Freeze node layout"}
-          >
-            {isPhysicsFrozen ? "Paused" : "Float"}
-          </button>
-
-          {/* Zoom In / Out / Reset / Fit */}
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.min(z * 1.2, 3.5))}
-            className="px-2 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded text-xs transition-colors cursor-pointer"
-            title="Zoom In"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.max(z * 0.8, 0.3))}
-            className="px-2 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded text-xs transition-colors cursor-pointer"
-            title="Zoom Out"
-          >
-            &minus;
-          </button>
-          <button
-            type="button"
-            onClick={handleZoomToFit}
-            className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded text-xs transition-colors cursor-pointer"
-            title="Fit graph to viewport"
-          >
-            Fit
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setZoom(1);
-              setPan({ x: 0, y: 0 });
-            }}
-            className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded text-xs transition-colors cursor-pointer"
-            title="Reset Pan and Zoom"
-          >
-            Reset
-          </button>
+          {/* Zoom Buttons with Bright Non-Dark Styling */}
+          <div className="flex items-center bg-white text-[#0e0e0e] rounded-xl overflow-hidden shadow-sm font-bold">
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.min(z * 1.2, 3.5))}
+              className="p-2 hover:bg-slate-100 text-[#0e0e0e] transition-colors cursor-pointer"
+              title="Zoom In"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.max(z * 0.8, 0.3))}
+              className="p-2 hover:bg-slate-100 text-[#0e0e0e] transition-colors cursor-pointer border-l border-slate-200"
+              title="Zoom Out"
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleZoomToFit}
+              className="p-2 hover:bg-slate-100 text-[#0e0e0e] transition-colors cursor-pointer border-l border-slate-200"
+              title="Fit to Screen"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setZoom(1);
+                setPan({ x: 0, y: 0 });
+              }}
+              className="p-2 hover:bg-slate-100 text-[#0e0e0e] transition-colors cursor-pointer border-l border-slate-200"
+              title="Reset View"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Interactive Canvas Viewport */}
-      <div className="relative w-full h-[540px] bg-[#0b0d10] select-none overflow-hidden">
+      <div className="graph-viewport relative w-full h-[580px] bg-[#0e0e0e] overflow-hidden">
         <canvas
           ref={canvasRef}
           onMouseDown={handleMouseDown}
@@ -791,27 +796,64 @@ export default function ObsidianGraphCanvas({
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onWheel={handleWheel}
-          className={`w-full h-full block ${getCanvasCursor()}`}
+          className={`w-full h-full block ${isInteracting ? "cursor-grabbing" : hoveredNode ? "cursor-pointer" : "cursor-grab"}`}
         />
 
-        {/* Canvas Legend & Flow Direction Guide */}
-        <div className="absolute top-3 left-3 flex items-center gap-3 text-[11px] bg-neutral-900/80 backdrop-blur px-3 py-1.5 rounded-lg border border-neutral-800 text-neutral-300 pointer-events-none">
+        {/* Dynamic Interactive Hover Pop-Up Card */}
+        {hoveredNode && hoverScreenPos && !selectedNode && (
+          <div
+            className="absolute z-30 pointer-events-none akaru-dropdown p-4 shadow-2xl border border-[#e49366]/40 text-xs text-white transition-opacity duration-150 space-y-2.5 min-w-64"
+            style={{
+              left: Math.min(Math.max(hoverScreenPos.x + 18, 14), 660),
+              top: Math.min(Math.max(hoverScreenPos.y - 40, 14), 440),
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+              <span className="font-bold text-white truncate max-w-44 text-sm">{hoveredNode.label}</span>
+              <span className="text-[10px] px-2 py-0.5 bg-[#e49366] text-[#0e0e0e] rounded-md font-bold uppercase">
+                {hoveredNode.language}
+              </span>
+            </div>
+            <div className="text-[11px] font-code text-[#9e9e9e] truncate">{hoveredNode.id}</div>
+            <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+              <div className="p-1.5 bg-[#171717] rounded-lg border border-white/10">
+                <div className="text-[9px] text-[#9e9e9e] uppercase font-bold">Callers</div>
+                <strong className="text-white text-xs">{hoveredNode.in_degree}</strong>
+              </div>
+              <div className="p-1.5 bg-[#171717] rounded-lg border border-white/10">
+                <div className="text-[9px] text-[#9e9e9e] uppercase font-bold">Imports</div>
+                <strong className="text-[#e49366] text-xs">{hoveredNode.out_degree}</strong>
+              </div>
+              <div className="p-1.5 bg-[#171717] rounded-lg border border-white/10">
+                <div className="text-[9px] text-[#9e9e9e] uppercase font-bold">Lines</div>
+                <strong className="text-white text-xs">{hoveredNode.line_count}</strong>
+              </div>
+            </div>
+            <div className="text-[10px] text-[#e49366] pt-0.5 flex items-center justify-between font-semibold">
+              <span>Click node to inspect AST &amp; code</span>
+              <span>&rarr;</span>
+            </div>
+          </div>
+        )}
+
+        {/* Legend Overlay */}
+        <div className="absolute top-4 left-4 flex items-center gap-4 text-xs font-semibold akaru-card-sm px-4 py-2 text-white pointer-events-none shadow-lg">
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
             <span>Caller (Inbound)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#e49366]"></span>
             <span>Import (Outbound)</span>
           </div>
         </div>
 
-        {/* Instructions Bar */}
-        <div className="absolute bottom-3 left-3 text-[11px] text-neutral-500 bg-neutral-900/80 backdrop-blur px-2.5 py-1 rounded border border-neutral-800 pointer-events-none">
-          Click node to inspect &bull; Drag to pan &bull; Wheel to zoom &bull; Arrows show dependency flow
+        {/* Instructions Footer */}
+        <div className="absolute bottom-4 left-4 text-[11px] text-[#9e9e9e] akaru-card-sm px-3.5 py-1.5 pointer-events-none shadow-lg font-medium">
+          Click any module to inspect AST &bull; Drag to pan &bull; Scroll to zoom
         </div>
 
-        {/* Dedicated Node Inspector Slide-out Drawer */}
+        {/* Dedicated Node Inspector Drawer */}
         {selectedNode && (
           <NodeInspectorDrawer
             owner={owner}
