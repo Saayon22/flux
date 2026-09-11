@@ -398,7 +398,7 @@ export default function ObsidianGraphCanvas({
 
         // 3. Directional Arrowhead
         if (dist > tgt.radius + 15) {
-          const offsetDist = dist - tgt.radius - 3;
+          const offsetDist = dist - tgt.radius - 2.5 / zoom;
           const arrowX = src.x + (dx / dist) * offsetDist;
           const arrowY = src.y + (dy / dist) * offsetDist;
           const angle = Math.atan2(dy, dx);
@@ -418,7 +418,7 @@ export default function ObsidianGraphCanvas({
         }
       }
 
-      // 4. Draw compact module tiles with a small live core and a readable label.
+      // 4. Draw circular nodes with high-contrast cluster fills and clean centered labels underneath.
       for (const node of nodes) {
         const clusterMatch =
           selectedClusterFilter === "all" || node.cluster === selectedClusterFilter;
@@ -436,56 +436,121 @@ export default function ObsidianGraphCanvas({
 
         ctx.save();
 
-        // Animated radar beacon around hub nodes
+        // Animated radar beacon around hub nodes or focused node
         if (node.in_degree >= 2 || isFocused) {
           const ripplePhase = (tTime * 0.7 + (node.cluster || 0)) % 1;
-          const rippleRadius = node.radius + ripplePhase * (isFocused ? 18 : 12);
-          const rippleOpacity = (1 - ripplePhase) * (isFocused ? 0.7 : 0.35);
+          const rippleRadius = node.radius + ripplePhase * (isFocused ? 20 : 13);
+          const rippleOpacity = (1 - ripplePhase) * (isFocused ? 0.75 : 0.35);
 
           ctx.beginPath();
           ctx.arc(node.x, node.y, rippleRadius, 0, 2 * Math.PI);
           ctx.strokeStyle = isFocused
             ? `rgba(223, 125, 76, ${rippleOpacity})`
-            : `rgba(23, 24, 23, ${rippleOpacity * 0.65})`;
+            : `rgba(23, 24, 23, ${rippleOpacity * 0.55})`;
           ctx.lineWidth = 1.2 / zoom;
           ctx.stroke();
         }
 
-        // Outer aura glow
+        // Outer aura glow on focused or hovered node
         if (isFocused || isHovered) {
+          const auraRadius = node.radius + (isFocused ? 8 : 6) / zoom;
           ctx.beginPath();
-          ctx.arc(node.x, node.y, node.radius + 9, 0, 2 * Math.PI);
-          ctx.fillStyle = "rgba(223, 125, 76, 0.16)";
+          ctx.arc(node.x, node.y, auraRadius, 0, 2 * Math.PI);
+          ctx.fillStyle = isFocused ? "rgba(223, 125, 76, 0.22)" : "rgba(223, 125, 76, 0.14)";
           ctx.fill();
         }
 
-        // Soft rounded-square module tile, rotated slightly to separate nodes from points.
-        const tileSize = node.radius * 1.7;
-        ctx.save();
-        ctx.translate(node.x, node.y);
-        ctx.rotate(Math.PI / 4);
+        // Elevation drop shadow beneath the circle
         ctx.beginPath();
-        ctx.roundRect(-tileSize / 2, -tileSize / 2, tileSize, tileSize, 4 / zoom);
-        ctx.fillStyle = isConnected ? "#fffefa" : "rgba(255, 254, 250, 0.6)";
+        ctx.arc(node.x, node.y + 1.8 / zoom, node.radius, 0, 2 * Math.PI);
+        ctx.fillStyle = isConnected ? "rgba(23, 24, 23, 0.12)" : "rgba(23, 24, 23, 0.04)";
         ctx.fill();
-        ctx.strokeStyle = isFocused ? "#171817" : isConnected ? nodeColor : "rgba(23, 24, 23, 0.22)";
-        ctx.lineWidth = (isFocused ? 2.4 : isHovered ? 2 : 1.2) / zoom;
+
+        // Solid porcelain base to occlude any background connection wires
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, 2 * Math.PI);
+        ctx.fillStyle = "#fffefa";
+        ctx.fill();
+
+        // Primary solid cluster-colored circle body
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, 2 * Math.PI);
+        ctx.fillStyle = isConnected ? nodeColor : "rgba(107, 114, 128, 0.22)";
+        ctx.fill();
+
+        // Crisp perimeter border
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, 2 * Math.PI);
+        if (isFocused) {
+          ctx.strokeStyle = "#171817";
+          ctx.lineWidth = 2.4 / zoom;
+        } else if (isHovered) {
+          ctx.strokeStyle = "#fffefa";
+          ctx.lineWidth = 2.2 / zoom;
+        } else if (isConnected) {
+          ctx.strokeStyle = "#fffefa";
+          ctx.lineWidth = 1.6 / zoom;
+        } else {
+          ctx.strokeStyle = "rgba(255, 254, 250, 0.6)";
+          ctx.lineWidth = 1 / zoom;
+        }
         ctx.stroke();
-        ctx.restore();
 
-        // Live center marker
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, Math.max(node.radius * 0.28, 2.5), 0, 2 * Math.PI);
-        ctx.fillStyle = isConnected ? nodeColor : "rgba(23, 24, 23, 0.26)";
-        ctx.fill();
+        // Additional accent reticle ring for focused node
+        if (isFocused) {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, node.radius + 3.5 / zoom, 0, 2 * Math.PI);
+          ctx.strokeStyle = "#df7d4c";
+          ctx.lineWidth = 1.4 / zoom;
+          ctx.stroke();
+        }
 
-        // Node Label
-        const showLabel = isFocused || isHovered || isConnected || zoom >= 0.95 || node.in_degree > 1;
+        // Clean module label positioned neatly at the bottom of the circle
+        const showLabel =
+          isFocused || isHovered || isConnected || zoom >= 0.85 || node.in_degree > 0;
         if (showLabel) {
-          ctx.font = `600 ${Math.max(10 / zoom, 9)}px var(--font-display, sans-serif)`;
+          const fontSize = Math.max(10.5 / zoom, 9);
+          ctx.font = `600 ${fontSize}px "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
           ctx.textAlign = "center";
-          ctx.fillStyle = isFocused || isHovered ? "#171817" : isConnected ? "#4e4d49" : "rgba(78, 77, 73, 0.38)";
-          ctx.fillText(node.label, node.x, node.y + node.radius + 13 / zoom);
+          ctx.textBaseline = "middle";
+
+          const textMetrics = ctx.measureText(node.label);
+          const textWidth = textMetrics.width;
+          const pillPaddingX = Math.max(5.5 / zoom, 4.5);
+          const pillHeight = Math.max(fontSize + 6 / zoom, 15 / zoom);
+          const pillY = node.y + node.radius + 5 / zoom;
+          const pillWidth = textWidth + pillPaddingX * 2;
+          const pillX = node.x - pillWidth / 2;
+          const pillRadius = 4 / zoom;
+
+          // Translucent pill backdrop to ensure label text contrast over crossing edges
+          ctx.beginPath();
+          ctx.roundRect(pillX, pillY, pillWidth, pillHeight, pillRadius);
+          if (isFocused || isHovered) {
+            ctx.fillStyle = "rgba(255, 254, 250, 0.98)";
+            ctx.fill();
+            ctx.strokeStyle = isFocused ? "#df7d4c" : "rgba(23, 24, 23, 0.28)";
+            ctx.lineWidth = (isFocused ? 1.4 : 1) / zoom;
+            ctx.stroke();
+          } else if (isConnected) {
+            ctx.fillStyle = "rgba(255, 254, 250, 0.88)";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(23, 24, 23, 0.1)";
+            ctx.lineWidth = 0.85 / zoom;
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = "rgba(255, 254, 250, 0.4)";
+            ctx.fill();
+          }
+
+          // Label typography
+          ctx.fillStyle =
+            isFocused || isHovered
+              ? "#171817"
+              : isConnected
+              ? "#2a2c2b"
+              : "rgba(42, 44, 43, 0.35)";
+          ctx.fillText(node.label, node.x, pillY + pillHeight / 2);
         }
 
         ctx.restore();
@@ -558,8 +623,19 @@ export default function ObsidianGraphCanvas({
 
       const dx = n.x - canvasX;
       const dy = n.y - canvasY;
-      const hitRadius = Math.max(n.radius + 12, 18);
+      const hitRadius = Math.max(n.radius + 8, 16);
       if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+        return n;
+      }
+
+      // Check hit against label pill positioned beneath circular node
+      const labelYStart = n.y + n.radius + 2 / zoom;
+      const labelYEnd = n.y + n.radius + 24 / zoom;
+      if (
+        canvasY >= labelYStart &&
+        canvasY <= labelYEnd &&
+        Math.abs(dx) <= Math.max(n.radius + 28, 44)
+      ) {
         return n;
       }
     }
