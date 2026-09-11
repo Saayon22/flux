@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from models.database import init_db
 from api.repos import router as repos_router
+from api.graph import router as graph_router
+from api.understanding import router as understanding_router
 
 
 @asynccontextmanager
@@ -40,6 +42,8 @@ app.add_middleware(
 
 # Mount API routers
 app.include_router(repos_router)
+app.include_router(graph_router)
+app.include_router(understanding_router)
 
 
 @app.get("/api/health", tags=["system"])

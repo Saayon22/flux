@@ -64,6 +64,33 @@ def init_db() -> None:
                 updated_at TEXT NOT NULL
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS repository_graphs (
+                repo_id TEXT PRIMARY KEY,
+                nodes_count INTEGER DEFAULT 0,
+                edges_count INTEGER DEFAULT 0,
+                metrics_json TEXT NOT NULL,
+                graph_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS repository_understandings (
+                repo_id TEXT PRIMARY KEY,
+                overview TEXT NOT NULL,
+                architecture_summary TEXT NOT NULL,
+                feature_map_json TEXT NOT NULL,
+                flows_json TEXT NOT NULL,
+                digest_text TEXT NOT NULL,
+                model_used TEXT NOT NULL,
+                is_fallback INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE
+            )
+        """)
         conn.commit()
 
 
@@ -141,3 +168,149 @@ def list_repositories(limit: int = 20) -> List[Dict[str, Any]]:
             (limit,)
         )
         return [dict(row) for row in cursor.fetchall()]
+
+
+def save_graph(
+    repo_id: str,
+    nodes_count: int,
+    edges_count: int,
+    metrics_json: str,
+    graph_json: str,
+    now_iso: str
+) -> None:
+    """
+    Saves or updates a repository's dependency graph and metrics in SQLite.
+    
+    Args:
+        repo_id: Case-insensitive unique repository identifier ('owner/repo').
+        nodes_count: Number of nodes in the graph.
+        edges_count: Number of edges in the graph.
+        metrics_json: JSON string of computed graph metrics.
+        graph_json: Complete JSON serialization of nodes and edges.
+        now_iso: Current ISO timestamp.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO repository_graphs (
+                repo_id, nodes_count, edges_count, metrics_json,
+                graph_json, created_at, updated_at
+            ) VALUES (
+                :repo_id, :nodes_count, :edges_count, :metrics_json,
+                :graph_json, :created_at, :updated_at
+            )
+            ON CONFLICT(repo_id) DO UPDATE SET
+                nodes_count=excluded.nodes_count,
+                edges_count=excluded.edges_count,
+                metrics_json=excluded.metrics_json,
+                graph_json=excluded.graph_json,
+                updated_at=excluded.updated_at
+        """, {
+            "repo_id": repo_id.lower(),
+            "nodes_count": nodes_count,
+            "edges_count": edges_count,
+            "metrics_json": metrics_json,
+            "graph_json": graph_json,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        })
+
+
+def get_graph_by_repo_id(repo_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieves the dependency graph and metrics record for a repository by its ID.
+    
+    Args:
+        repo_id: Case-insensitive repository identifier ('owner/repo').
+        
+    Returns:
+        Dictionary containing graph record if found, None otherwise.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM repository_graphs WHERE LOWER(repo_id) = LOWER(?)",
+            (repo_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def save_understanding(
+    repo_id: str,
+    overview: str,
+    architecture_summary: str,
+    feature_map_json: str,
+    flows_json: str,
+    digest_text: str,
+    model_used: str,
+    is_fallback: bool,
+    now_iso: str
+) -> None:
+    """
+    Saves or updates a repository's plain-English understanding and architectural summary in SQLite.
+    
+    Args:
+        repo_id: Case-insensitive unique repository identifier ('owner/repo').
+        overview: High-level plain-English repository overview.
+        architecture_summary: Grounded architecture and data flow explanation.
+        feature_map_json: JSON string of extracted features and associated files.
+        flows_json: JSON string of component connection flows.
+        digest_text: Compact digest text used as prompt context.
+        model_used: Name of model used (or fallback indicator).
+        is_fallback: True if generated via deterministic grounded fallback.
+        now_iso: Current ISO timestamp.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO repository_understandings (
+                repo_id, overview, architecture_summary, feature_map_json,
+                flows_json, digest_text, model_used, is_fallback,
+                created_at, updated_at
+            ) VALUES (
+                :repo_id, :overview, :architecture_summary, :feature_map_json,
+                :flows_json, :digest_text, :model_used, :is_fallback,
+                :created_at, :updated_at
+            )
+            ON CONFLICT(repo_id) DO UPDATE SET
+                overview=excluded.overview,
+                architecture_summary=excluded.architecture_summary,
+                feature_map_json=excluded.feature_map_json,
+                flows_json=excluded.flows_json,
+                digest_text=excluded.digest_text,
+                model_used=excluded.model_used,
+                is_fallback=excluded.is_fallback,
+                updated_at=excluded.updated_at
+        """, {
+            "repo_id": repo_id.lower(),
+            "overview": overview,
+            "architecture_summary": architecture_summary,
+            "feature_map_json": feature_map_json,
+            "flows_json": flows_json,
+            "digest_text": digest_text,
+            "model_used": model_used,
+            "is_fallback": 1 if is_fallback else 0,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        })
+
+
+def get_understanding_by_repo_id(repo_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieves the plain-English understanding record for a repository by its ID.
+    
+    Args:
+        repo_id: Case-insensitive repository identifier ('owner/repo').
+        
+    Returns:
+        Dictionary containing understanding record if found, None otherwise.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM repository_understandings WHERE LOWER(repo_id) = LOWER(?)",
+            (repo_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None

@@ -94,3 +94,168 @@ export async function listRepositories(): Promise<RepoMetadata[]> {
   }
   return response.json();
 }
+
+export interface CodeSymbol {
+  name: string;
+  type: string;
+  start_line: number;
+  end_line: number;
+  docstring?: string | null;
+}
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  node_type: string;
+  language: string;
+  line_count: number;
+  symbols: CodeSymbol[];
+  in_degree: number;
+  out_degree: number;
+  centrality: number;
+  cluster: number;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: string;
+}
+
+export interface TopCentralFile {
+  file: string;
+  score: number;
+  in_degree: number;
+  out_degree: number;
+}
+
+export interface GraphMetrics {
+  total_nodes: number;
+  total_edges: number;
+  density: number;
+  top_central_files: TopCentralFile[];
+  clusters_count: number;
+}
+
+export interface GraphResponse {
+  repo_id: string;
+  metrics: GraphMetrics;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  updated_at: string;
+}
+
+/**
+ * Initiates AST parsing and builds the NetworkX dependency graph for a repository.
+ *
+ * @param owner Repository owner
+ * @param repo Repository name
+ */
+export async function buildRepoGraph(
+  owner: string,
+  repo: string
+): Promise<GraphResponse> {
+  const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/graph/build`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to build dependency graph");
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetches the existing dependency graph for a repository if already computed.
+ *
+ * @param owner Repository owner
+ * @param repo Repository name
+ */
+export async function getRepoGraph(
+  owner: string,
+  repo: string
+): Promise<GraphResponse | null> {
+  const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/graph`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to fetch dependency graph");
+  }
+
+  return response.json();
+}
+
+export interface FeatureItem {
+  name: string;
+  description: string;
+  files: string[];
+}
+
+export interface ArchitectureFlow {
+  component: string;
+  role: string;
+  central_file: string;
+  connections: string[];
+}
+
+export interface RepoUnderstanding {
+  repo_id: string;
+  overview: string;
+  architecture_summary: string;
+  feature_map: FeatureItem[];
+  flows: ArchitectureFlow[];
+  model_used: string;
+  is_fallback: boolean;
+  digest?: string | null;
+  created_at: string;
+}
+
+/**
+ * Generates plain-English repository understanding (overview, feature map, architecture).
+ *
+ * @param owner Repository owner
+ * @param repo Repository name
+ */
+export async function generateRepoUnderstanding(
+  owner: string,
+  repo: string
+): Promise<RepoUnderstanding> {
+  const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/understand`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to generate repository understanding");
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetches cached repository understanding if already computed.
+ *
+ * @param owner Repository owner
+ * @param repo Repository name
+ */
+export async function getRepoUnderstanding(
+  owner: string,
+  repo: string
+): Promise<RepoUnderstanding | null> {
+  const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/understand`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to fetch repository understanding");
+  }
+
+  return response.json();
+}
+
+

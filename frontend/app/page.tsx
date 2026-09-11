@@ -1,13 +1,23 @@
 "use client";
 
 /**
- * Main Page for flux (Phase 1: Repository Ingestion).
- * Provides a clean, focused UI to accept a GitHub repository URL,
- * initiate local shallow cloning, and view repository metadata and docs.
+ * Main Page for flux (Phases 1-3: Ingestion, AST Dependency Graph, and Repository Understanding).
+ * Allows users to ingest a GitHub repository, view the Obsidian-style dependency graph,
+ * and generate grounded plain-English repository understanding with overview, feature map, and architecture flow.
  */
 
 import React, { useState } from "react";
-import { ingestRepository, RepoMetadata } from "./lib/api";
+import {
+  ingestRepository,
+  buildRepoGraph,
+  getRepoGraph,
+  generateRepoUnderstanding,
+  getRepoUnderstanding,
+  RepoMetadata,
+  GraphResponse,
+  RepoUnderstanding,
+} from "./lib/api";
+import ObsidianGraphCanvas from "./components/ObsidianGraphCanvas";
 
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
@@ -16,9 +26,20 @@ export default function Home() {
   const [repo, setRepo] = useState<RepoMetadata | null>(null);
   const [activeTab, setActiveTab] = useState<"readme" | "contributing">("readme");
 
+  // Phase 2: Graph State
+  const [graph, setGraph] = useState<GraphResponse | null>(null);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [graphError, setGraphError] = useState<string | null>(null);
+
+  // Phase 3: Repository Understanding State
+  const [understanding, setUnderstanding] = useState<RepoUnderstanding | null>(null);
+  const [understandingLoading, setUnderstandingLoading] = useState(false);
+  const [understandingError, setUnderstandingError] = useState<string | null>(null);
+  const [understandingTab, setUnderstandingTab] = useState<"overview" | "architecture" | "features">("overview");
+
   /**
    * Handles submission of the GitHub URL.
-   * Calls the backend ingestion endpoint and updates UI state.
+   * Ingests the repository, then checks if a dependency graph or understanding already exists.
    */
   const handleIngest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,11 +47,41 @@ export default function Home() {
 
     setLoading(true);
     setError(null);
+    setGraph(null);
+    setGraphError(null);
+    setUnderstanding(null);
+    setUnderstandingError(null);
 
     try {
       const response = await ingestRepository(repoUrl.trim());
       setRepo(response.repository);
       setActiveTab("readme");
+
+      // Check if this repository already has a computed dependency graph
+      try {
+        const existingGraph = await getRepoGraph(
+          response.repository.owner,
+          response.repository.name
+        );
+        if (existingGraph) {
+          setGraph(existingGraph);
+        }
+      } catch {
+        // Graph not yet computed
+      }
+
+      // Check if this repository already has cached understanding
+      try {
+        const existingUnderstanding = await getRepoUnderstanding(
+          response.repository.owner,
+          response.repository.name
+        );
+        if (existingUnderstanding) {
+          setUnderstanding(existingUnderstanding);
+        }
+      } catch {
+        // Understanding not yet generated
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "An unexpected error occurred.";
       setError(message);
@@ -39,20 +90,59 @@ export default function Home() {
     }
   };
 
+  /**
+   * Triggers Tree-sitter AST parsing and NetworkX graph generation.
+   */
+  const handleBuildGraph = async () => {
+    if (!repo) return;
+    setGraphLoading(true);
+    setGraphError(null);
+
+    try {
+      const graphData = await buildRepoGraph(repo.owner, repo.name);
+      setGraph(graphData);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to build dependency graph.";
+      setGraphError(message);
+    } finally {
+      setGraphLoading(false);
+    }
+  };
+
+  /**
+   * Generates plain-English repository understanding (overview, feature map, architecture flow).
+   */
+  const handleGenerateUnderstanding = async () => {
+    if (!repo) return;
+    setUnderstandingLoading(true);
+    setUnderstandingError(null);
+
+    try {
+      const result = await generateRepoUnderstanding(repo.owner, repo.name);
+      setUnderstanding(result);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to generate repository understanding.";
+      setUnderstandingError(message);
+    } finally {
+      setUnderstandingLoading(false);
+    }
+  };
+
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col items-center px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-4xl space-y-8">
+    <main className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col items-center px-4 py-10 sm:px-6 lg:px-8">
+      <div className="w-full max-w-5xl space-y-8">
         
         {/* Header Section */}
         <div className="text-center space-y-2">
           <div className="inline-block px-3 py-1 text-xs font-semibold tracking-wider text-emerald-400 uppercase bg-emerald-950/60 border border-emerald-800/40 rounded-full">
-            Phase 1: Repository Ingestion
+            Phase 1, 2 &amp; 3: Ingestion, Graph &amp; Understanding
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
             flux
           </h1>
           <p className="text-sm sm:text-base text-neutral-400 max-w-xl mx-auto">
-            Enter a public GitHub repository URL to clone it into local workspaces and inspect documentation.
+            Grounded repository understanding with AST dependency graphs, plain-English architecture summaries,
+            and feature mapping.
           </p>
         </div>
 
@@ -65,7 +155,7 @@ export default function Home() {
               onChange={(e) => setRepoUrl(e.target.value)}
               placeholder="https://github.com/owner/repository"
               disabled={loading}
-              className="flex-1 px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+              className="flex-1 px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm font-mono"
               required
             />
             <button
@@ -79,7 +169,7 @@ export default function Home() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                   </svg>
-                  <span>Cloning...</span>
+                  <span>Ingesting...</span>
                 </>
               ) : (
                 "Ingest Repository"
@@ -103,7 +193,7 @@ export default function Home() {
               Cloning repository into local workspaces...
             </div>
             <div className="text-xs text-neutral-500">
-              Performing shallow clone and reading documentation (README, CONTRIBUTING).
+              Performing shallow clone and extracting documentation (README, CONTRIBUTING).
             </div>
           </div>
         )}
@@ -111,7 +201,7 @@ export default function Home() {
         {/* Ingested Repository Result Card */}
         {repo && !loading && (
           <div className="border border-neutral-800 bg-neutral-900/60 rounded-xl overflow-hidden shadow-lg space-y-6 p-6">
-            {/* Repo Title & Details */}
+            {/* Repo Title & Details & Actions */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
               <div>
                 <div className="flex items-center gap-3">
@@ -126,14 +216,61 @@ export default function Home() {
                   <p className="text-sm text-neutral-400 mt-1">{repo.description}</p>
                 )}
               </div>
-              <a
-                href={repo.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-neutral-400 hover:text-white underline underline-offset-4 self-start sm:self-center"
-              >
-                View on GitHub &rarr;
-              </a>
+              
+              <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-center">
+                <a
+                  href={repo.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-neutral-400 hover:text-white underline underline-offset-4 mr-1"
+                >
+                  GitHub &rarr;
+                </a>
+
+                {/* Build Dependency Graph Action Button */}
+                <button
+                  type="button"
+                  onClick={handleBuildGraph}
+                  disabled={graphLoading}
+                  className="px-3.5 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:bg-neutral-900 disabled:text-neutral-600 text-neutral-200 font-medium rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed border border-neutral-700/60"
+                >
+                  {graphLoading ? (
+                    <>
+                      <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                      </svg>
+                      <span>Parsing AST...</span>
+                    </>
+                  ) : graph ? (
+                    "Rebuild Graph"
+                  ) : (
+                    "Build Graph"
+                  )}
+                </button>
+
+                {/* Generate Repository Understanding Action Button */}
+                <button
+                  type="button"
+                  onClick={handleGenerateUnderstanding}
+                  disabled={understandingLoading}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-medium rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shadow"
+                >
+                  {understandingLoading ? (
+                    <>
+                      <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                      </svg>
+                      <span>Analyzing...</span>
+                    </>
+                  ) : understanding ? (
+                    "Regenerate Understanding"
+                  ) : (
+                    "Understand Repository"
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Metadata Stats Grid */}
@@ -170,8 +307,191 @@ export default function Home() {
               <span className="text-emerald-400">{repo.clone_path}</span>
             </div>
 
+            {/* Phase 3: Repository Understanding View */}
+            {understandingLoading && (
+              <div className="p-6 border border-neutral-800 bg-neutral-900/30 rounded-xl text-center space-y-2 animate-pulse">
+                <div className="text-sm font-medium text-emerald-400">
+                  Synthesizing repository understanding...
+                </div>
+                <div className="text-xs text-neutral-500">
+                  Distilling AST graph metrics, central files, and documentation into plain-English architecture.
+                </div>
+              </div>
+            )}
+
+            {understandingError && (
+              <div className="p-3 bg-red-950/50 border border-red-800/60 rounded-lg text-xs text-red-200">
+                <span className="font-semibold text-red-400">Understanding Error: </span>
+                {understandingError}
+              </div>
+            )}
+
+            {understanding && !understandingLoading && (
+              <div className="border border-neutral-800 bg-neutral-950/70 rounded-xl p-5 space-y-4">
+                {/* Header with Fallback / Engine Indicator */}
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800/80 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm text-neutral-200">
+                      Repository Understanding
+                    </span>
+                    {/* Fallback vs Live LLM Indicator */}
+                    {understanding.is_fallback ? (
+                      <span
+                        className="px-2 py-0.5 text-[11px] font-medium bg-amber-950/80 text-amber-300 border border-amber-800/70 rounded-full flex items-center gap-1.5"
+                        title="Generated using deterministic graph metrics and README heuristics"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                        Grounded Fallback Engine
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 text-[11px] font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-800/70 rounded-full flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                        Model: {understanding.model_used}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Understanding Tabs */}
+                  <div className="flex items-center gap-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setUnderstandingTab("overview")}
+                      className={`px-3 py-1 rounded transition-colors cursor-pointer ${
+                        understandingTab === "overview"
+                          ? "bg-neutral-800 text-emerald-400 font-medium"
+                          : "text-neutral-400 hover:text-neutral-200"
+                      }`}
+                    >
+                      Overview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUnderstandingTab("architecture")}
+                      className={`px-3 py-1 rounded transition-colors cursor-pointer ${
+                        understandingTab === "architecture"
+                          ? "bg-neutral-800 text-emerald-400 font-medium"
+                          : "text-neutral-400 hover:text-neutral-200"
+                      }`}
+                    >
+                      Architecture Flow
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUnderstandingTab("features")}
+                      className={`px-3 py-1 rounded transition-colors cursor-pointer ${
+                        understandingTab === "features"
+                          ? "bg-neutral-800 text-emerald-400 font-medium"
+                          : "text-neutral-400 hover:text-neutral-200"
+                      }`}
+                    >
+                      Feature Map ({understanding.feature_map.length})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tab Content 1: Overview */}
+                {understandingTab === "overview" && (
+                  <div className="space-y-3 text-xs sm:text-sm text-neutral-300 leading-relaxed">
+                    <p>{understanding.overview}</p>
+                  </div>
+                )}
+
+                {/* Tab Content 2: Architecture Flow */}
+                {understandingTab === "architecture" && (
+                  <div className="space-y-4">
+                    <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed">
+                      {understanding.architecture_summary}
+                    </p>
+
+                    {/* Architecture Component Flows */}
+                    {understanding.flows && understanding.flows.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        {understanding.flows.map((flow, i) => (
+                          <div
+                            key={i}
+                            className="p-3 bg-neutral-900/80 rounded-lg border border-neutral-800 text-xs space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-emerald-400">
+                                {flow.component}
+                              </span>
+                              <span className="font-mono text-[10px] text-neutral-500 truncate max-w-[140px]" title={flow.central_file}>
+                                {flow.central_file}
+                              </span>
+                            </div>
+                            <p className="text-neutral-400 text-[11px]">{flow.role}</p>
+                            {flow.connections && flow.connections.length > 0 && (
+                              <div className="text-[10px] text-neutral-500 font-mono pt-1">
+                                Interacts with: <span className="text-neutral-300">{flow.connections.join(", ")}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tab Content 3: Feature Map */}
+                {understandingTab === "features" && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 gap-3">
+                      {understanding.feature_map.map((feat, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 bg-neutral-900/80 rounded-lg border border-neutral-800 space-y-1.5"
+                        >
+                          <div className="font-semibold text-xs text-neutral-200">
+                            {feat.name}
+                          </div>
+                          <p className="text-xs text-neutral-400">
+                            {feat.description}
+                          </p>
+                          {feat.files && feat.files.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {feat.files.map((file, fIdx) => (
+                                <span
+                                  key={fIdx}
+                                  className="px-2 py-0.5 bg-neutral-950 font-mono text-[10px] text-emerald-400 rounded border border-neutral-800"
+                                >
+                                  {file}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Graph Error Alert */}
+            {graphError && (
+              <div className="p-3 bg-red-950/50 border border-red-800/60 rounded-lg text-xs text-red-200">
+                <span className="font-semibold text-red-400">Graph Error: </span>
+                {graphError}
+              </div>
+            )}
+
+            {/* Phase 2: Obsidian-Style Dependency Graph Canvas */}
+            {graph && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-neutral-200 uppercase tracking-wider">
+                    Repository Architecture Graph
+                  </h3>
+                  <div className="text-xs text-neutral-400">
+                    Grounded with Tree-sitter &amp; NetworkX
+                  </div>
+                </div>
+                <ObsidianGraphCanvas graph={graph} />
+              </div>
+            )}
+
             {/* Documentation Tabs */}
-            <div className="space-y-3">
+            <div className="space-y-3 pt-2">
               <div className="flex border-b border-neutral-800 text-sm">
                 <button
                   type="button"
@@ -198,7 +518,7 @@ export default function Home() {
               </div>
 
               {/* Documentation Content Viewer */}
-              <div className="bg-neutral-950 p-4 rounded-lg border border-neutral-800 max-h-96 overflow-y-auto font-mono text-xs text-neutral-300 whitespace-pre-wrap">
+              <div className="bg-neutral-950 p-4 rounded-lg border border-neutral-800 max-h-72 overflow-y-auto font-mono text-xs text-neutral-300 whitespace-pre-wrap">
                 {activeTab === "readme" ? (
                   repo.readme_content ? (
                     repo.readme_content
@@ -213,12 +533,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Phase 2 Transition Notice */}
-            <div className="p-4 bg-emerald-950/30 border border-emerald-800/40 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-emerald-300">
-              <span>
-                ✓ Repository ingested into local workspaces. Ready for Phase 2: AST & Dependency Graph parsing.
-              </span>
-            </div>
           </div>
         )}
 
