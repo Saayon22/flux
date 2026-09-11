@@ -245,12 +245,33 @@ async def generate_repository_understanding(
         if not parsed_data:
             raise ValueError("LLM returned empty structured response.")
 
+        feature_map = parsed_data.feature_map
+        if not feature_map:
+            feature_map = [
+                FeatureItem(
+                    name="Core Documentation & Setup",
+                    description="Foundational repository files, documentation, and configuration.",
+                    files=["README.md"] if repo_data.get("readme_content") else ["root"],
+                )
+            ]
+
+        flows = parsed_data.flows
+        if not flows:
+            flows = [
+                ArchitectureFlow(
+                    component="Root Documentation",
+                    role="Documentation and project entry point.",
+                    central_file="README.md",
+                    connections=[],
+                )
+            ]
+
         return RepoUnderstanding(
             repo_id=repo_id,
             overview=parsed_data.overview,
             architecture_summary=parsed_data.architecture_summary,
-            feature_map=parsed_data.feature_map,
-            flows=parsed_data.flows,
+            feature_map=feature_map,
+            flows=flows,
             model_used=model_name,
             is_fallback=False,
             digest=digest,

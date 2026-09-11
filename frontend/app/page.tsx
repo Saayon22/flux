@@ -6,7 +6,7 @@
  * and generate grounded plain-English repository understanding with overview, feature map, and architecture flow.
  */
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   ingestRepository,
   buildRepoGraph,
@@ -18,6 +18,7 @@ import {
   RepoUnderstanding,
 } from "./lib/api";
 import ObsidianGraphCanvas from "./components/ObsidianGraphCanvas";
+import IssueExplorer from "./components/IssueExplorer";
 
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
@@ -36,6 +37,17 @@ export default function Home() {
   const [understandingLoading, setUnderstandingLoading] = useState(false);
   const [understandingError, setUnderstandingError] = useState<string | null>(null);
   const [understandingTab, setUnderstandingTab] = useState<"overview" | "architecture" | "features">("overview");
+
+  // Phase 4: Graph Explorer Focused Node & Section Scroll
+  const [focusedGraphNodeId, setFocusedGraphNodeId] = useState<string | null>(null);
+  const graphSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const handleJumpToNode = (nodeId: string) => {
+    setFocusedGraphNodeId(nodeId);
+    if (graphSectionRef.current) {
+      graphSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   /**
    * Handles submission of the GitHub URL.
@@ -411,18 +423,35 @@ export default function Home() {
                             key={i}
                             className="p-3 bg-neutral-900/80 rounded-lg border border-neutral-800 text-xs space-y-1.5"
                           >
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-emerald-400">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-emerald-400 truncate">
                                 {flow.component}
                               </span>
-                              <span className="font-mono text-[10px] text-neutral-500 truncate max-w-[140px]" title={flow.central_file}>
-                                {flow.central_file}
-                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleJumpToNode(flow.central_file)}
+                                className="font-mono text-[10px] text-neutral-400 hover:text-emerald-300 hover:underline truncate max-w-[150px] cursor-pointer flex items-center gap-1"
+                                title={`Focus ${flow.central_file} in Graph Explorer`}
+                              >
+                                <span className="truncate">{flow.central_file}</span>
+                                <span>&rarr;</span>
+                              </button>
                             </div>
                             <p className="text-neutral-400 text-[11px]">{flow.role}</p>
                             {flow.connections && flow.connections.length > 0 && (
-                              <div className="text-[10px] text-neutral-500 font-mono pt-1">
-                                Interacts with: <span className="text-neutral-300">{flow.connections.join(", ")}</span>
+                              <div className="text-[10px] text-neutral-500 font-mono pt-1 flex flex-wrap items-center gap-1">
+                                <span>Interacts with:</span>
+                                {flow.connections.map((conn, cIdx) => (
+                                  <button
+                                    key={cIdx}
+                                    type="button"
+                                    onClick={() => handleJumpToNode(conn)}
+                                    className="text-neutral-300 hover:text-sky-300 underline underline-offset-2 cursor-pointer font-mono"
+                                    title={`Focus ${conn} in Graph Explorer`}
+                                  >
+                                    {conn}
+                                  </button>
+                                ))}
                               </div>
                             )}
                           </div>
@@ -450,12 +479,16 @@ export default function Home() {
                           {feat.files && feat.files.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 pt-1">
                               {feat.files.map((file, fIdx) => (
-                                <span
+                                <button
                                   key={fIdx}
-                                  className="px-2 py-0.5 bg-neutral-950 font-mono text-[10px] text-emerald-400 rounded border border-neutral-800"
+                                  type="button"
+                                  onClick={() => handleJumpToNode(file)}
+                                  className="px-2 py-0.5 bg-neutral-950 hover:bg-neutral-800 text-emerald-400 hover:text-emerald-300 font-mono text-[10px] rounded border border-neutral-800 transition-colors cursor-pointer flex items-center gap-1"
+                                  title={`Locate ${file} in Graph Explorer`}
                                 >
-                                  {file}
-                                </span>
+                                  <span>{file}</span>
+                                  <span className="text-neutral-500">&rarr;</span>
+                                </button>
                               ))}
                             </div>
                           )}
@@ -475,20 +508,33 @@ export default function Home() {
               </div>
             )}
 
-            {/* Phase 2: Obsidian-Style Dependency Graph Canvas */}
+            {/* Phase 4: Obsidian-Style Dependency Graph Explorer */}
             {graph && (
-              <div className="space-y-3">
+              <div ref={graphSectionRef} className="space-y-3 scroll-mt-6">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-neutral-200 uppercase tracking-wider">
-                    Repository Architecture Graph
+                    Repository Graph Explorer
                   </h3>
                   <div className="text-xs text-neutral-400">
-                    Grounded with Tree-sitter &amp; NetworkX
+                    60 FPS Force Simulation &bull; Clustering &bull; Search &bull; Code Inspector
                   </div>
                 </div>
-                <ObsidianGraphCanvas graph={graph} />
+                <ObsidianGraphCanvas
+                  owner={repo.owner}
+                  repo={repo.name}
+                  graph={graph}
+                  focusedNodeId={focusedGraphNodeId}
+                  onClearFocus={() => setFocusedGraphNodeId(null)}
+                />
               </div>
             )}
+
+            {/* Phase 5: GitHub Issue Discovery & Grounded Explanation */}
+            <IssueExplorer
+              owner={repo.owner}
+              repo={repo.name}
+              onSelectFile={handleJumpToNode}
+            />
 
             {/* Documentation Tabs */}
             <div className="space-y-3 pt-2">

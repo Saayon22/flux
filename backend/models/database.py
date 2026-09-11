@@ -91,6 +91,40 @@ def init_db() -> None:
                 FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS repository_issues (
+                id TEXT PRIMARY KEY,
+                repo_id TEXT NOT NULL,
+                issue_number INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT,
+                state TEXT NOT NULL,
+                author TEXT,
+                labels_json TEXT NOT NULL,
+                comments_count INTEGER DEFAULT 0,
+                github_url TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS issue_explanations (
+                id TEXT PRIMARY KEY,
+                repo_id TEXT NOT NULL,
+                issue_number INTEGER NOT NULL,
+                plain_english_summary TEXT NOT NULL,
+                real_world_analogy TEXT NOT NULL,
+                implementation_steps_json TEXT NOT NULL,
+                relevant_files_json TEXT NOT NULL,
+                estimated_complexity TEXT NOT NULL,
+                model_used TEXT NOT NULL,
+                is_fallback INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE
+            )
+        """)
         conn.commit()
 
 
@@ -314,3 +348,132 @@ def get_understanding_by_repo_id(repo_id: str) -> Optional[Dict[str, Any]]:
         )
         row = cursor.fetchone()
         return dict(row) if row else None
+
+
+def save_issues(repo_id: str, issues: List[Dict[str, Any]]) -> None:
+    """
+    Inserts or updates a list of GitHub issues for a repository in SQLite.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        for issue in issues:
+            issue_id = f"{repo_id.lower()}#{issue['number']}"
+            cursor.execute("""
+                INSERT INTO repository_issues (
+                    id, repo_id, issue_number, title, body, state,
+                    author, labels_json, comments_count, github_url,
+                    created_at, updated_at
+                ) VALUES (
+                    :id, :repo_id, :issue_number, :title, :body, :state,
+                    :author, :labels_json, :comments_count, :github_url,
+                    :created_at, :updated_at
+                )
+                ON CONFLICT(id) DO UPDATE SET
+                    title=excluded.title,
+                    body=excluded.body,
+                    state=excluded.state,
+                    author=excluded.author,
+                    labels_json=excluded.labels_json,
+                    comments_count=excluded.comments_count,
+                    updated_at=excluded.updated_at
+            """, {
+                "id": issue_id,
+                "repo_id": repo_id.lower(),
+                "issue_number": issue["number"],
+                "title": issue["title"],
+                "body": issue.get("body") or "",
+                "state": issue.get("state", "open"),
+                "author": issue.get("author") or "",
+                "labels_json": issue.get("labels_json") or "[]",
+                "comments_count": issue.get("comments_count", 0),
+                "github_url": issue.get("html_url") or "",
+                "created_at": issue.get("created_at") or "",
+                "updated_at": issue.get("updated_at") or "",
+            })
+
+
+def get_issues_by_repo_id(repo_id: str, label_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Retrieves stored GitHub issues for a repository, optionally filtered by label.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if label_filter and label_filter.strip().lower() != "all":
+            # Filter by label within JSON text
+            pattern = f'%"{label_filter.strip()}"%'
+            cursor.execute(
+                "SELECT * FROM repository_issues WHERE LOWER(repo_id) = LOWER(?) AND labels_json LIKE ? ORDER BY issue_number DESC",
+                (repo_id, pattern)
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM repository_issues WHERE LOWER(repo_id) = LOWER(?) ORDER BY issue_number DESC",
+                (repo_id,)
+            )
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+def save_issue_explanation(
+    repo_id: str,
+    issue_number: int,
+    data: Dict[str, Any],
+    now_iso: str
+) -> None:
+    """
+    Inserts or updates an issue explanation record in SQLite.
+    """
+    explanation_id = f"{repo_id.lower()}#{issue_number}"
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO issue_explanations (
+                id, repo_id, issue_number, plain_english_summary,
+                real_world_analogy, implementation_steps_json,
+                relevant_files_json, estimated_complexity,
+                model_used, is_fallback, created_at, updated_at
+            ) VALUES (
+                :id, :repo_id, :issue_number, :plain_english_summary,
+                :real_world_analogy, :implementation_steps_json,
+                :relevant_files_json, :estimated_complexity,
+                :model_used, :is_fallback, :created_at, :updated_at
+            )
+            ON CONFLICT(id) DO UPDATE SET
+                plain_english_summary=excluded.plain_english_summary,
+                real_world_analogy=excluded.real_world_analogy,
+                implementation_steps_json=excluded.implementation_steps_json,
+                relevant_files_json=excluded.relevant_files_json,
+                estimated_complexity=excluded.estimated_complexity,
+                model_used=excluded.model_used,
+                is_fallback=excluded.is_fallback,
+                updated_at=excluded.updated_at
+        """, {
+            "id": explanation_id,
+            "repo_id": repo_id.lower(),
+            "issue_number": issue_number,
+            "plain_english_summary": data["plain_english_summary"],
+            "real_world_analogy": data["real_world_analogy"],
+            "implementation_steps_json": data["implementation_steps_json"],
+            "relevant_files_json": data["relevant_files_json"],
+            "estimated_complexity": data.get("estimated_complexity", "Medium"),
+            "model_used": data.get("model_used", "unknown"),
+            "is_fallback": 1 if data.get("is_fallback") else 0,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        })
+
+
+def get_issue_explanation(repo_id: str, issue_number: int) -> Optional[Dict[str, Any]]:
+    """
+    Retrieves the cached explanation for a specific issue.
+    """
+    explanation_id = f"{repo_id.lower()}#{issue_number}"
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM issue_explanations WHERE id = ?",
+            (explanation_id,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+

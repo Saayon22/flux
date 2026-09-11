@@ -258,4 +258,139 @@ export async function getRepoUnderstanding(
   return response.json();
 }
 
+export interface FileContentResponse {
+  path: string;
+  language: string;
+  line_count: number;
+  content: string;
+  is_truncated: boolean;
+  error?: string | null;
+}
 
+/**
+ * Fetches the source code content of a file in the repository workspace.
+ *
+ * @param owner Repository owner
+ * @param repo Repository name
+ * @param path Relative path inside workspace
+ */
+export async function fetchFileContent(
+  owner: string,
+  repo: string,
+  path: string
+): Promise<FileContentResponse> {
+  const params = new URLSearchParams({ path });
+  const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/files/content?${params.toString()}`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to load file content");
+  }
+  return response.json();
+}
+
+export interface IssueLabel {
+  name: string;
+  color: string;
+  description?: string | null;
+}
+
+export interface IssueSummary {
+  id: string;
+  number: number;
+  title: string;
+  body?: string;
+  state: string;
+  author: string;
+  labels: IssueLabel[];
+  comments_count: number;
+  html_url: string;
+  created_at: string;
+}
+
+export interface RelevantFileItem {
+  file: string;
+  reason: string;
+  symbols_to_inspect: string[];
+}
+
+export interface IssueExplanation {
+  issue_id: string;
+  repo_id: string;
+  issue_number: number;
+  plain_english_summary: string;
+  real_world_analogy: string;
+  relevant_files: RelevantFileItem[];
+  implementation_steps: string[];
+  estimated_complexity: string;
+  model_used: string;
+  is_fallback: boolean;
+  created_at: string;
+}
+
+export interface IssueListResponse {
+  repo_id: string;
+  total_count: number;
+  available_labels: IssueLabel[];
+  issues: IssueSummary[];
+}
+
+/**
+ * Fetches open issues for a repository with optional label filtering.
+ */
+export async function fetchRepoIssues(
+  owner: string,
+  repo: string,
+  label?: string,
+  forceRefresh: boolean = false
+): Promise<IssueListResponse> {
+  const params = new URLSearchParams();
+  if (label && label.toLowerCase() !== "all") {
+    params.set("label", label);
+  }
+  if (forceRefresh) {
+    params.set("force_refresh", "true");
+  }
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/issues${query}`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to fetch issues");
+  }
+  return response.json();
+}
+
+/**
+ * Generates or retrieves an on-demand plain-English explanation for a specific issue.
+ */
+export async function explainIssue(
+  owner: string,
+  repo: string,
+  issueNumber: number
+): Promise<IssueExplanation> {
+  const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/issues/${issueNumber}/explain`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to generate issue explanation");
+  }
+  return response.json();
+}
+
+/**
+ * Seeds a demo issue for testing when a repository has 0 open GitHub issues.
+ */
+export async function seedDemoIssue(
+  owner: string,
+  repo: string
+): Promise<IssueSummary> {
+  const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/issues/seed`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to seed demo issue");
+  }
+  return response.json();
+}

@@ -46,6 +46,19 @@ async def test_api_endpoints():
         assert len(res.json()) >= 1
         print("[PASS] GET /api/repos returned 200 OK")
 
+        # 5. File content endpoint (valid file)
+        res = await client.get("/api/repos/octocat/Hello-World/files/content", params={"path": "README"})
+        assert res.status_code == 200, f"File content failed: {res.text}"
+        file_data = res.json()
+        assert file_data["path"] == "README"
+        assert file_data["line_count"] >= 1
+        print("[PASS] GET /api/repos/.../files/content returned 200 OK")
+
+        # 6. File content endpoint (directory traversal blocked)
+        res = await client.get("/api/repos/octocat/Hello-World/files/content", params={"path": "../../main.py"})
+        assert res.status_code in (403, 404), f"Security check failed: {res.status_code}"
+        print("[PASS] Directory traversal attempt properly blocked with 403/404")
+
     print("--- All API Endpoints Verified Successfully! ---")
 
 
