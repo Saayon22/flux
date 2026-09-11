@@ -18,6 +18,16 @@ import {
   explainIssue,
   seedDemoIssue,
 } from "../lib/api";
+import {
+  CircleDot,
+  Search,
+  RefreshCw,
+  ExternalLink,
+  FileCode,
+  ArrowRight,
+  CloudCog,
+  Bot,
+} from "lucide-react";
 
 interface IssueExplorerProps {
   owner: string;
@@ -25,6 +35,9 @@ interface IssueExplorerProps {
   onSelectFile: (filePath: string) => void;
   onPrepareAgentHandoff?: (issue: IssueSummary, explanation: IssueExplanation) => void;
 }
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
 
 export default function IssueExplorer({
   owner,
@@ -52,14 +65,13 @@ export default function IssueExplorer({
       const demo = await seedDemoIssue(owner, repo);
       setIssues((prev) => [demo, ...prev]);
       setSelectedIssue(demo);
-    } catch (err: any) {
-      setIssuesError(err.message || "Failed to seed sample issue.");
+    } catch (err: unknown) {
+      setIssuesError(getErrorMessage(err, "Failed to seed sample issue."));
     } finally {
       setSeeding(false);
     }
   };
 
-  // Load issues on mount or when repo changes
   const loadIssues = useCallback(
     async (forceRefresh = false) => {
       setLoadingIssues(true);
@@ -73,7 +85,6 @@ export default function IssueExplorer({
         if (data.available_labels && data.available_labels.length > 0) {
           setAvailableLabels(data.available_labels);
         }
-        // Auto-select first open issue if none selected or if selected issue is now closed
         if (openIssues.length > 0) {
           setSelectedIssue((prev) =>
             prev && openIssues.some((i) => i.number === prev.number)
@@ -83,8 +94,8 @@ export default function IssueExplorer({
         } else {
           setSelectedIssue(null);
         }
-      } catch (err: any) {
-        setIssuesError(err.message || "Failed to load GitHub issues.");
+      } catch (err: unknown) {
+        setIssuesError(getErrorMessage(err, "Failed to load GitHub issues."));
       } finally {
         setLoadingIssues(false);
       }
@@ -93,15 +104,11 @@ export default function IssueExplorer({
   );
 
   useEffect(() => {
-    loadIssues();
-  }, [selectedLabel, owner, repo]);
+    void loadIssues();
+  }, [loadIssues]);
 
-  // When selected issue changes, fetch or generate its explanation on-demand
   useEffect(() => {
-    if (!selectedIssue) {
-      setExplanation(null);
-      return;
-    }
+    if (!selectedIssue) return;
 
     let isMounted = true;
     setExplaining(true);
@@ -114,9 +121,11 @@ export default function IssueExplorer({
           setExplaining(false);
         }
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         if (isMounted) {
-          setExplanationError(err.message || "Failed to generate issue explanation.");
+          setExplanationError(
+            getErrorMessage(err, "Failed to generate grounded issue explanation.")
+          );
           setExplaining(false);
         }
       });
@@ -126,7 +135,6 @@ export default function IssueExplorer({
     };
   }, [owner, repo, selectedIssue]);
 
-  // Client-side search filtering (strictly open issues only)
   const filteredIssues = useMemo(() => {
     const openOnly = issues.filter(
       (i) => !i.state || i.state.toLowerCase() === "open"
@@ -141,77 +149,73 @@ export default function IssueExplorer({
     );
   }, [issues, searchQuery]);
 
-  const getComplexityBadge = (complexity: string) => {
-    switch (complexity.toLowerCase()) {
-      case "low":
-        return "bg-emerald-950 text-emerald-300 border-emerald-800";
-      case "high":
-        return "bg-red-950 text-red-300 border-red-800";
-      default:
-        return "bg-amber-950 text-amber-300 border-amber-800";
-    }
-  };
-
   return (
-    <div className="border border-neutral-800 bg-neutral-950 rounded p-4 space-y-4">
+    <div className="issue-explorer akaru-card p-6 sm:p-8 space-y-6 shadow-2xl">
       {/* Header & Controls Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-xs font-bold font-mono text-neutral-300 uppercase tracking-wider">
-              Issue Discovery &amp; Explanation
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-5">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-2xl bg-[#e49366] text-[#0e0e0e] flex items-center justify-center font-bold shadow-md shadow-[#e49366]/20">
+            <CircleDot className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-white tracking-tight">
+              Issue Discovery &amp; Grounded Resolution
             </h3>
-            <span className="px-2 py-0.5 text-[11px] font-mono bg-neutral-900 text-neutral-400 rounded border border-neutral-800">
-              {filteredIssues.length} open
-            </span>
+            <p className="text-xs text-[#9e9e9e] mt-0.5">
+              Inspect grounded problem breakdowns and launch verified autonomous agent fixes.
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Quick Issue Search */}
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Filter issues..."
-            className="px-2.5 py-1.5 bg-neutral-900 border border-neutral-800 rounded text-xs font-mono text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-600 w-48"
-          />
+        <div className="flex items-center gap-3">
+          {/* Issue Filter Input */}
+          <div className="flex items-center gap-2 px-3.5 py-2 bg-[#0e0e0e] border border-white/15 rounded-xl focus-within:border-[#e49366] transition-all">
+            <Search className="w-4 h-4 text-[#e49366]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search issues..."
+              className="bg-transparent text-xs text-white placeholder-white/40 focus:outline-none w-44 font-code"
+            />
+          </div>
 
-          {/* Refresh Button */}
+          {/* Sync (Bright White Button) */}
           <button
             type="button"
             onClick={() => loadIssues(true)}
             disabled={loadingIssues}
-            className="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 rounded text-xs font-mono transition-colors cursor-pointer border border-neutral-800 disabled:opacity-50"
+            className="btn-white px-4 py-2 text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
-            {loadingIssues ? "Syncing..." : "Sync GitHub"}
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingIssues ? "animate-spin" : ""}`} />
+            <span>Sync</span>
           </button>
         </div>
       </div>
 
       {/* Label Filter Strip */}
       {availableLabels.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-mono">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
           <button
             type="button"
             onClick={() => setSelectedLabel("all")}
-            className={`px-2 py-0.5 rounded text-[11px] transition-colors cursor-pointer shrink-0 border ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border ${
               selectedLabel === "all"
-                ? "bg-neutral-800 border-neutral-600 text-white font-bold"
-                : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200"
+                ? "bg-[#e49366] text-[#0e0e0e] border-[#e49366]"
+                : "bg-transparent text-white border-white/20 hover:border-white"
             }`}
           >
-            All Labels
+            All Labels ({issues.length})
           </button>
           {availableLabels.map((lbl) => (
             <button
               key={lbl.name}
               type="button"
               onClick={() => setSelectedLabel(lbl.name)}
-              className={`px-2 py-0.5 rounded text-[11px] transition-colors cursor-pointer shrink-0 flex items-center gap-1.5 border ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border ${
                 selectedLabel === lbl.name
-                  ? "bg-neutral-800 border-neutral-600 text-white font-bold"
-                  : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200"
+                  ? "bg-[#e49366] text-[#0e0e0e] border-[#e49366]"
+                  : "bg-transparent text-white border-white/20 hover:border-white"
               }`}
             >
               <span>{lbl.name}</span>
@@ -222,29 +226,30 @@ export default function IssueExplorer({
 
       {/* Error Alert */}
       {issuesError && (
-        <div className="p-2.5 bg-red-950/60 border border-red-800 text-xs font-mono text-red-300">
+        <div className="p-4 bg-red-950/60 border border-red-800 rounded-2xl text-xs font-code text-red-300">
           {issuesError}
         </div>
       )}
 
-      {/* Main Split-View: Issue List on Left | Deep Dive on Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 pt-1">
-        {/* Left Column: Issue List (5 cols) */}
-        <div className="lg:col-span-5 space-y-2 max-h-[580px] overflow-y-auto pr-1">
+      {/* Main Split-View */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-1">
+        {/* Left Column: Issue List */}
+        <div className="lg:col-span-5 space-y-3 max-h-[580px] overflow-y-auto pr-1">
           {loadingIssues && issues.length === 0 ? (
-            <div className="p-6 text-center text-xs font-mono text-neutral-500 border border-neutral-800 rounded bg-neutral-900/50">
-              Fetching repository issues...
+            <div className="p-12 text-center text-xs text-[#9e9e9e] akaru-card-sm">
+              <div className="w-5 h-5 border-2 border-[#e49366] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+              Fetching repository issues from GitHub...
             </div>
           ) : filteredIssues.length === 0 ? (
-            <div className="p-6 text-center border border-neutral-800 rounded bg-neutral-900/50 text-xs font-mono text-neutral-400 space-y-3">
-              <p>No open issues found.</p>
+            <div className="p-10 text-center akaru-card-sm text-xs text-[#9e9e9e] space-y-3">
+              <p>No open issues found matching your query.</p>
               <button
                 type="button"
                 onClick={handleSeedDemoIssue}
                 disabled={seeding}
-                className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded text-xs font-mono transition-colors cursor-pointer disabled:opacity-50 border border-neutral-700"
+                className="btn-terracotta px-4 py-2 text-xs cursor-pointer"
               >
-                {seeding ? "Seeding..." : "Seed Sample Issue"}
+                {seeding ? "Seeding..." : "Seed Benchmark Issue"}
               </button>
             </div>
           ) : (
@@ -254,231 +259,174 @@ export default function IssueExplorer({
                 <div
                   key={issue.id}
                   onClick={() => setSelectedIssue(issue)}
-                  className={`p-3 rounded border transition-colors cursor-pointer text-xs space-y-1.5 ${
+                  className={`issue-list-card p-4 rounded-2xl border transition-all cursor-pointer text-xs space-y-2 ${
                     isSelected
-                      ? "bg-neutral-900 border-neutral-600 text-white"
-                      : "bg-neutral-950 border-neutral-800 text-neutral-300 hover:bg-neutral-900/50 hover:border-neutral-700"
+                      ? "issue-list-card-selected bg-[#1f1f1f] border-[#e49366] shadow-lg"
+                      : "bg-[#151515] border-white/10 text-white hover:bg-[#1c1c1c] hover:border-white/30"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-mono text-neutral-400 font-bold shrink-0">
-                      #{issue.number}
-                    </span>
-                    <span className="font-medium text-neutral-200 line-clamp-2 flex-1">
-                      {issue.title}
+                  <div className="flex items-center justify-between font-code text-[11px]">
+                    <span className="text-[#e49366] font-bold">#{issue.number}</span>
+                    <span className="text-[#9e9e9e] font-sans text-[11px]">
+                      {issue.comments_count || 0} comments
                     </span>
                   </div>
-
-                  {/* Labels Strip */}
+                  <h4 className="font-bold text-white text-sm line-clamp-2 leading-snug">
+                    {issue.title}
+                  </h4>
                   {issue.labels && issue.labels.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {issue.labels.map((lbl, idx) => (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {issue.labels.slice(0, 3).map((lbl, lIdx) => (
                         <span
-                          key={idx}
-                          className="px-1.5 py-0.2 text-[10px] rounded border border-neutral-800 text-neutral-400 font-mono"
+                          key={lIdx}
+                          className="px-2 py-0.5 bg-[#0e0e0e] text-white text-[10px] font-code rounded-md border border-white/10 font-medium"
                         >
                           {lbl.name}
                         </span>
                       ))}
                     </div>
                   )}
-
-                  <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500 pt-1 border-t border-neutral-800">
-                    <span>@{issue.author}</span>
-                    {issue.comments_count > 0 && (
-                      <span>{issue.comments_count} comments</span>
-                    )}
-                  </div>
                 </div>
               );
             })
           )}
         </div>
 
-        {/* Right Column: Deep Dive & Grounded Explanation (7 cols) */}
-        <div className="lg:col-span-7 bg-neutral-950 border border-neutral-800 rounded p-4 space-y-4">
+        {/* Right Column: Grounded AI Explanation */}
+        <div className="issue-detail lg:col-span-7 bg-[#141414] border border-white/10 rounded-2xl p-6 space-y-5 max-h-[580px] overflow-y-auto">
           {!selectedIssue ? (
-            <div className="h-48 flex items-center justify-center text-center text-xs font-mono text-neutral-500">
-              Select an issue from the list to view its explanation and checklist.
+            <div className="p-16 text-center text-xs text-[#9e9e9e]">
+              Select an issue from the list to inspect grounded explanations and fix blueprints.
             </div>
           ) : (
-            <div className="space-y-4">
-              {/* Selected Issue Header */}
-              <div className="space-y-2 border-b border-neutral-800 pb-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+            <div className="space-y-5">
+              {/* Header */}
+              <div className="border-b border-white/10 pb-4 space-y-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-white font-bold text-sm">
+                      <span className="px-2.5 py-0.5 bg-[#e49366] text-[#0e0e0e] font-code text-[11px] font-extrabold rounded-md">
                         #{selectedIssue.number}
                       </span>
-                      <span className="px-2 py-0.2 text-[10px] font-mono font-semibold bg-neutral-900 text-neutral-300 border border-neutral-800 rounded">
-                        OPEN
+                      <span className="text-xs text-[#9e9e9e]">
+                        opened by <strong className="text-white">{selectedIssue.author || "user"}</strong>
                       </span>
                     </div>
-                    <h4 className="text-sm font-bold text-neutral-100 mt-1">
+                    <h3 className="text-lg font-extrabold text-white leading-tight">
                       {selectedIssue.title}
-                    </h4>
+                    </h3>
                   </div>
 
-                  <a
-                    href={selectedIssue.html_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-mono text-neutral-400 hover:text-white underline shrink-0"
-                  >
-                    GitHub &rarr;
-                  </a>
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <a
+                      href={selectedIssue.html_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-2.5 bg-white text-[#0e0e0e] rounded-xl font-bold hover:bg-slate-100 transition-all cursor-pointer shadow-sm"
+                      title="View on GitHub"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+
+                    {onPrepareAgentHandoff && explanation && (
+                      <button
+                        type="button"
+                        onClick={() => onPrepareAgentHandoff(selectedIssue, explanation)}
+                        className="btn-terracotta px-4 py-2.5 text-xs flex items-center gap-2 cursor-pointer shadow-md"
+                      >
+                        <Bot className="w-4 h-4" />
+                        <span>Solve with Agent</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {/* Toggle Original Issue Body */}
-                {selectedIssue.body && (
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setShowOriginalBody((s) => !s)}
-                      className="text-[11px] font-mono text-neutral-400 hover:text-neutral-200 underline cursor-pointer"
-                    >
-                      {showOriginalBody ? "Hide original issue body" : "View original issue body"}
-                    </button>
-                    {showOriginalBody && (
-                      <div className="mt-2 p-3 bg-neutral-900 rounded border border-neutral-800 font-mono text-xs text-neutral-300 whitespace-pre-wrap max-h-48 overflow-y-auto">
-                        {selectedIssue.body}
-                      </div>
-                    )}
+                <button
+                  type="button"
+                  onClick={() => setShowOriginalBody(!showOriginalBody)}
+                  className="text-xs text-[#e49366] hover:underline cursor-pointer inline-block font-semibold"
+                >
+                  {showOriginalBody ? "Hide Original Description" : "View Original GitHub Description"}
+                </button>
+
+                {showOriginalBody && (
+                  <div className="p-4 bg-[#0e0e0e] rounded-2xl border border-white/10 text-xs font-code text-white whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
+                    {selectedIssue.body || "No description provided."}
                   </div>
                 )}
               </div>
 
-              {/* Explanation Content Area */}
+              {/* Grounded Breakdown */}
               {explaining && (
-                <div className="p-6 text-center text-xs font-mono text-neutral-400 border border-neutral-800 rounded bg-neutral-900">
-                  Generating explanation from repository dependency graph...
+                <div className="p-12 text-center text-xs text-white space-y-3">
+                  <div className="w-6 h-6 border-2 border-[#e49366] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                  <p>Synthesizing grounded explanation via Gemini...</p>
                 </div>
               )}
 
               {explanationError && (
-                <div className="p-2.5 bg-red-950/60 border border-red-800 text-xs font-mono text-red-300">
+                <div className="p-4 bg-red-950/60 border border-red-800 rounded-2xl text-xs font-code text-red-300">
                   {explanationError}
                 </div>
               )}
 
               {explanation && !explaining && (
-                <div className="space-y-4">
-                  {/* Indicators */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                    <div className="flex items-center gap-2">
-                      <span className="text-neutral-400">Complexity:</span>
-                      <span className="font-semibold text-neutral-200 uppercase">
-                        {explanation.estimated_complexity}
-                      </span>
+                <div className="space-y-5 text-xs">
+                  {/* Summary */}
+                  <div className="space-y-2 bg-[#0e0e0e] p-5 rounded-2xl border border-white/10">
+                    <div className="text-xs font-bold text-[#e49366] uppercase tracking-wider flex items-center gap-2">
+                      <CloudCog className="w-4 h-4 text-[#e49366]" strokeWidth={2.25} />
+                      Executive Summary
                     </div>
-
-                    <span className="text-[11px] text-neutral-400">
-                      {explanation.is_fallback ? "Fallback Engine" : `Model: ${explanation.model_used}`}
-                    </span>
-                  </div>
-
-                  {/* 1. Plain-English Summary */}
-                  <div className="space-y-1">
-                    <h5 className="text-xs font-bold font-mono text-neutral-400 uppercase tracking-wider">
-                      Summary
-                    </h5>
-                    <p className="text-xs text-neutral-200 leading-relaxed bg-neutral-900 p-3 rounded border border-neutral-800 font-mono whitespace-pre-wrap">
+                    <p className="text-white leading-relaxed text-xs">
                       {explanation.plain_english_summary}
                     </p>
                   </div>
 
-                  {/* 2. Real-World Analogy */}
-                  {explanation.real_world_analogy && (
-                    <div className="space-y-1">
-                      <h5 className="text-xs font-bold font-mono text-neutral-400 uppercase tracking-wider">
-                        Analogy
-                      </h5>
-                      <div className="p-3 bg-neutral-900 rounded border border-neutral-800 text-xs text-neutral-300 leading-relaxed font-mono whitespace-pre-wrap">
-                        {explanation.real_world_analogy}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 3. Relevant 1-Hop Files */}
+                  {/* Impacted Files */}
                   {explanation.relevant_files && explanation.relevant_files.length > 0 && (
-                    <div className="space-y-1.5">
-                      <h5 className="text-xs font-bold font-mono text-neutral-400 uppercase tracking-wider">
-                        Relevant Files ({explanation.relevant_files.length})
-                      </h5>
-
-                      <div className="space-y-1">
-                        {explanation.relevant_files.map((rf, idx) => (
-                          <div
-                            key={idx}
-                            className="p-2 bg-neutral-900 rounded border border-neutral-800 flex items-start justify-between gap-2"
+                    <div className="space-y-2.5">
+                      <div className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <FileCode className="w-4 h-4 text-[#e49366]" />
+                        Impacted Source Files
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {explanation.relevant_files.map((item, fIdx) => (
+                          <button
+                            key={fIdx}
+                            type="button"
+                            onClick={() => onSelectFile(item.file)}
+                            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#1a1a1a] hover:bg-[#242424] text-white hover:text-[#e49366] rounded-xl border border-white/10 hover:border-[#e49366] text-xs font-code transition-all cursor-pointer shadow-sm"
                           >
-                            <div className="space-y-0.5 min-w-0 flex-1">
-                              <button
-                                type="button"
-                                onClick={() => onSelectFile(rf.file)}
-                                className="font-mono text-xs font-semibold text-neutral-200 hover:underline flex items-center gap-1 cursor-pointer truncate"
-                              >
-                                <span>{rf.file}</span>
-                                <span className="text-neutral-500">&rarr;</span>
-                              </button>
-                              <p className="text-[11px] text-neutral-400">{rf.reason}</p>
-                            </div>
-
-                            {rf.symbols_to_inspect && rf.symbols_to_inspect.length > 0 && (
-                              <div className="shrink-0 flex flex-wrap gap-1 max-w-[150px] justify-end font-mono text-[9px]">
-                                {rf.symbols_to_inspect.slice(0, 2).map((s, sIdx) => (
-                                  <span
-                                    key={sIdx}
-                                    className="px-1 py-0.5 bg-neutral-950 text-neutral-400 rounded border border-neutral-800"
-                                  >
-                                    {s}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                            <span>{item.file}</span>
+                            <ArrowRight className="w-3.5 h-3.5 text-[#e49366]" />
+                          </button>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* 4. Implementation Steps */}
+                  {/* Implementation Steps */}
                   {explanation.implementation_steps && explanation.implementation_steps.length > 0 && (
-                    <div className="space-y-1.5 pt-1">
-                      <h5 className="text-xs font-bold font-mono text-neutral-400 uppercase tracking-wider">
-                        Checklist
-                      </h5>
-                      <div className="space-y-1">
-                        {explanation.implementation_steps.map((step, sIdx) => (
+                    <div className="space-y-2.5">
+                      <div className="text-xs font-bold text-white uppercase tracking-wider">
+                        Resolution Steps Blueprint
+                      </div>
+                      <div className="space-y-2">
+                        {explanation.implementation_steps.map((stepText, sIdx) => (
                           <div
                             key={sIdx}
-                            className="p-2 bg-neutral-900 rounded border border-neutral-800 text-xs flex items-start gap-2 text-neutral-300 font-mono"
+                            className="p-3.5 bg-[#0e0e0e] rounded-xl border border-white/10 text-white text-xs flex items-start gap-3"
                           >
-                            <span className="text-neutral-500 font-bold shrink-0">
-                              {sIdx + 1}.
+                            <span className="text-[#e49366] font-code font-extrabold text-xs shrink-0 mt-0.5">
+                              0{sIdx + 1}.
                             </span>
-                            <span className="leading-relaxed">{step}</span>
+                            <span className="leading-relaxed">{stepText}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
-
-                  {/* Agent Handoff Action Button */}
-                  <div className="pt-2 border-t border-neutral-800 flex items-center justify-end">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (onPrepareAgentHandoff) {
-                          onPrepareAgentHandoff(selectedIssue, explanation);
-                        }
-                      }}
-                      className="px-4 py-2 bg-neutral-100 hover:bg-white text-neutral-900 font-semibold rounded text-xs cursor-pointer font-mono"
-                    >
-                      Handoff to Agent &rarr;
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
