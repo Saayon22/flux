@@ -1,0 +1,250 @@
+===============================================================================
+                       REPORAMP AGENT CAPABILITIES & SYSTEM GUIDE
+===============================================================================
+
+-------------------------------------------------------------------------------
+1. COMPLETE FEATURE LIST
+-------------------------------------------------------------------------------
+The RepoRamp Agent System is built strictly on Google ADK (google-adk 2.9.0)
+and provides the following core capabilities:
+
+1. Modular Multi-Agent System:
+   - Root Coordinator Agent (`reporamp_root`): Routes requests and gates handoffs.
+   - Summarizer Agent (`summarizer_agent`): Generates repository architecture digests.
+   - Issue Explainer Agent (`issue_explainer_agent`): Identifies affected files and root causes.
+   - Orchestrator Agent (`orchestrator_agent`): Executes code generation, complexity routing, and PR creation.
+
+2. Repository Ingestion & AST Parsing:
+   - Clones Git repositories into local isolated workspaces (`clone_repo_tool`).
+   - Parses code AST (functions, classes, call graphs, imports) using `parse_ast_tool`.
+   - Constructs NetworkX dependency graphs and executes Louvain Community Detection
+     (`build_graph_digest_tool`) to identify architectural modules and hubs.
+
+3. Local Code Editing Tools (Direct Disk Access):
+   - `read_file_tool`: Reads source code directly from local disk files.
+   - `write_file_tool`: Creates or rewrites source code files on local disk.
+   - `edit_file_tool`: Performs targeted search & replace in code files.
+   - `list_files_tool`: Browses files and directories on local disk.
+
+4. Asynchronous Fork Provisioning:
+   - `fork_repo_tool` implemented as a native ADK `LongRunningFunctionTool`.
+   - Asynchronously creates GitHub forks and polls without blocking the agent loop.
+
+5. Headless Code Patch Generation (OpenCode Integration):
+   - `run_opencode_tool` executes headless code generation subprocesses:
+     `opencode run --dir <path> --model <model> "<prompt>" --auto`
+   - Injects graph-digest relevant files (avoiding full raw AST or token bloat).
+   - Wrapped with ADK `RetryConfig` (automatic backoff and retry for transient failures).
+   - Equipped with cached known-good fallback diff for demo resiliency.
+
+6. Deterministic Complexity Router:
+   - Workflow Runtime node (`FunctionNode`) evaluating diff metrics:
+     * If line count <= 150, files touched <= 4, and validation passes:
+       Routes to `publish_pr_tool` (automatically creates cross-repo Pull Request).
+     * If line count > 150, files touched > 4, or validation fails:
+       Routes to `generate_plan_artifact_tool` (produces structured architecture plan).
+
+7. Human-in-the-Loop (HITL) Opt-In Gate:
+   - `confirm_handoff_opt_in` and `tool_context.request_confirmation` ensure the agent
+     NEVER modifies external resources or triggers the orchestrator without user approval.
+
+8. Cross-Pipeline Persistent Session State:
+   - Uses ADK `tool_context.state` to carry the repository digest, issue data,
+     fork references, and generated diffs across multiple turns.
+
+9. Observability & Tracing:
+   - Structured logging and OpenTelemetry tracing (`tracing.py`) tracking every tool
+     call, subprocess invocation, and routing decision.
+
+10. CLI & Web UI Compatibility:
+   - Compatible with `adk web`, `adk api_server`, and `adk run`.
+
+-------------------------------------------------------------------------------
+2. CAN IT INPUT COMMANDS AND GENERATE A CODE PATCH OUTPUT?
+-------------------------------------------------------------------------------
+YES, ABSOLUTELY.
+
+How it works:
+1. Inputting a Command/Prompt:
+   You can provide natural language commands or issue descriptions to the agent via:
+   - The interactive CLI (`adk run reporamp`)
+   - Direct prompt: `adk run reporamp "Fix issue #42: validate event payloads"`
+   - The Web UI chat interface (`adk web reporamp`)
+   - REST API requests (`adk api_server reporamp`)
+
+2. Generating Code Patch Output:
+   - When the user confirms opt-in, the agent invokes `run_opencode_tool` with the
+     issue context and relevant files from the graph digest.
+   - The tool executes OpenCode (or its built-in fallback diff engine if OpenCode is
+     not installed on the system).
+   - It outputs a unified git diff (e.g.):
+     --- a/src/handler.py
+     +++ b/src/handler.py
+     @@ -10,7 +10,7 @@ def process_event(event_data: dict) -> dict:
+          if not event_data.get("valid"):
+              raise ValueError("Invalid event payload")
+     -    return {"status": "pending", "payload": event_data}
+     +    return {"status": "processed", "payload": event_data, "verified": True}
+
+   - If the patch is small and clean, it pushes to your fork and opens a Pull Request.
+   - If the patch is too complex or fails validation, it generates a comprehensive
+     implementation plan artifact instead.
+
+-------------------------------------------------------------------------------
+3. THE TWO DEDICATED COMMANDS TO RUN AND INTERACT
+-------------------------------------------------------------------------------
+Instead of juggling multiple different commands, you have TWO clean commands:
+
+COMMAND 1: TERMINAL INTERACTIVE SESSION (CLI)
+==============================================
+Run:
+    python cli.py
+
+How it works:
+- Starts a direct, interactive terminal chat loop.
+- It displays a `You > ` prompt.
+- Type whatever you want (e.g. "Summarize the repository", "Read main.py", "Edit function handler in src/handler.py").
+- The agent processes your request, invokes its local tools (or LLM reasoning), and immediately prints `Agent >` with its response.
+- Type `exit` or `quit` to end the session.
+
+
+COMMAND 2: WEB CLIENT INTERACTIVE SESSION (BACKEND REST API, NO UI)
+===================================================================
+Run:
+    python server.py
+
+How it works:
+- Starts a pure backend interactive server on http://127.0.0.1:8000 (no frontend UI).
+- Send commands / prompts via HTTP POST to:
+    http://127.0.0.1:8000/chat
+- Input JSON format:
+    {"message": "Your prompt or command here"}
+- Output JSON format:
+    {"status": "success", "session_id": "...", "response": "Agent output here"}
+- Also provides interactive OpenAPI Swagger docs at:
+    http://127.0.0.1:8000/docs
+
+-------------------------------------------------------------------------------
+4. HOW THE AGENT WORKFLOW WORKS (STEP-BY-STEP)
+-------------------------------------------------------------------------------
+Step 1: Ingestion & Analysis
+   User provides a repo URL or issue. The Coordinator delegates to `summarizer_agent`,
+   which runs `clone_repo`, `parse_ast`, and `build_graph_digest` (NetworkX + Louvain).
+   The resulting topological summary is saved in session state.
+
+Step 2: Issue Triage & Root Cause
+   User asks about a bug. The Coordinator delegates to `issue_explainer_agent`, which
+   calls `fetch_issue`, cross-references the issue with the graph digest, and outputs
+   the minimal set of relevant source files.
+
+Step 3: Human-in-the-Loop Confirmation Gate
+   Before altering code or forking repositories, the Coordinator invokes
+   `confirm_handoff_opt_in`. The agent stops and asks the user for explicit permission.
+
+Step 4: Orchestrator Handoff
+   Upon confirmation, the `orchestrator_agent` takes over:
+   a. Asynchronously creates a fork (`fork_repo_tool` via LongRunningFunctionTool).
+   b. Invokes OpenCode headless (`run_opencode_tool`) with the relevant files.
+   c. Captures the generated unified diff.
+
+Step 5: Complexity Router (Deterministic Branching)
+   `complexity_router_node` inspects line count, touched files, and validation:
+   - Route "pr": If line count <= 150 and files <= 4, calls `publish_pr_tool` to open a PR.
+   - Route "plan": If changes are high-risk, calls `generate_plan_artifact_tool`
+     to output a structured engineering plan.
+
+Step 6: Final Response & Session Persistence
+   The user receives the PR link or implementation plan. All states, diffs, and
+   artifacts remain stored in the session for subsequent queries.
+
+-------------------------------------------------------------------------------
+5. WHICH MODEL IS THE AGENT USING?
+-------------------------------------------------------------------------------
+The agent uses Model Routing to optimize cost, speed, and reasoning strength:
+
+- Default Cheap Models (Summarizer, Issue Explainer, Coordinator):
+  Uses Google's Gemma 4 (`gemma-4-31b-it` or `gemma-4`).
+  Configurable via environment variable: `REPORAMP_CHEAP_MODEL`.
+  Fallback: `gemini-2.5-flash`.
+
+- Strongest Coding Model (Orchestrator Agent):
+  Uses Google's strongest coding model (`gemini-2.5-pro` or `gemma-4-31b-it`).
+  Configurable via environment variable: `REPORAMP_STRONG_MODEL`.
+
+- Model Configuration:
+  Defined in `config.py`. You can swap models at any time by setting environment
+  variables or updating `config.py` without modifying agent code.
+
+-------------------------------------------------------------------------------
+6. HOW IS THE AGENT INTEGRATED WITH YOUR LOCAL SYSTEM?
+-------------------------------------------------------------------------------
+The integration is local, native, and robust:
+
+1. Python & Google ADK Runtime:
+   Installed `google-adk 2.9.0` directly into your Windows Python environment
+   (Python 3.13.1).
+
+2. Local File System & Git:
+   - Tool `clone_repo` accesses your local Windows disk under `workspaces/`.
+   - Tool `parse_ast` uses Python's built-in `ast` module and `tree-sitter` to read
+     and parse local Python source files directly on disk.
+
+3. Graph Analysis Engines:
+   - `networkx 3.6.1` and `networkx.community.louvain_communities` execute in-process
+     on your CPU to perform modularity clustering without external server dependencies.
+
+4. External Process Invocation (OpenCode):
+   - `run_opencode` uses Python's `subprocess` to call `opencode run` locally if installed.
+   - If `opencode` is not installed or the system is in demo mode, it seamlessly
+     activates the built-in demo fallback diff engine so the pipeline never crashes.
+
+5. ADK CLI App Packaging:
+   - Packaged with standard entrypoints in `reporamp/agent.py` and `orchestrator/agent.py`.
+   - Fully recognized by `adk run`, `adk web`, and `adk api_server`.
+
+-------------------------------------------------------------------------------
+7. HOW DOES THE AGENT THINK AND STORE ITS MEMORY / STATE?
+-------------------------------------------------------------------------------
+1. How it Thinks (Reasoning Loop):
+   - Google ADK uses an event-driven ReAct (Reason + Act) loop.
+   - When you send a prompt, the agent receives your text, consults its instructions,
+     and decides whether to answer directly or emit a Function Call to a tool.
+   - Tools execute and return structured dictionaries.
+   - The agent reads the tool output and determines whether another tool is needed or
+     if it can formulate the final user response.
+
+2. How it Stores State:
+   - ADK Session State (`tool_context.state`): A thread-safe, turn-persistent state store.
+   - Data stored includes:
+     * `state["graph_digest"]`: AST clusters, hubs, and total node count.
+     * `state["relevant_files"]`: Specific files identified for code changes.
+     * `state["current_issue"]`: Issue title, body, labels, and issue ID.
+     * `state["fork_ref"]`: Forked repo URL/reference created by LongRunningFunctionTool.
+     * `state["diff"]` & `state["diff_stats"]`: Generated code patch and metrics.
+     * `state["routing_decision"]`: "pr" or "plan".
+     * `state["user_opted_in"]`: Human-in-the-loop authorization flag.
+   - Storage Backends:
+     ADK supports SQLite (`sqlite://path.db`), file storage (`.adk`), or in-memory
+     session services. By default, it persists across turns in the active session.
+
+-------------------------------------------------------------------------------
+8. DOES IT HAVE A CONTEXT WINDOW?
+-------------------------------------------------------------------------------
+YES. The system manages context at two distinct levels:
+
+1. The LLM Model Context Window:
+   - Gemma 4 and Gemini 2.5 Pro have vast native context windows (typically ranging from
+     128k to 1,000,000+ tokens).
+   - This allows the agent to ingest extensive conversational history and documentation.
+
+2. ADK Context Management & Token Preservation (The PRD Rule):
+   - In raw LLM agents, dumping entire code repositories or full ASTs into the prompt
+     exhausts context limits and causes hallucinations.
+   - RepoRamp strictly solves this via its static-analysis compression layer:
+     * Raw AST and full code files stay OUTSIDE the LLM context.
+     * Only the distilled Graph Digest (Louvain communities, key hubs, summary metrics)
+       is stored in session state and passed to the agent.
+     * When invoking OpenCode, only the minimal set of relevant files is passed.
+   - This ensures the agent never exceeds its context window and operates with maximum
+     precision and speed.
+===============================================================================

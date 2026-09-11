@@ -394,3 +394,122 @@ export async function seedDemoIssue(
   }
   return response.json();
 }
+
+export interface DiffStats {
+  line_count: number;
+  files_touched: string[];
+  validation_passed: boolean;
+}
+
+export interface PullRequestResult {
+  status: string;
+  action: string;
+  pr_url: string;
+  pr_number: number;
+  branch: string;
+  fork_ref: string;
+}
+
+export interface PlanArtifact {
+  title: string;
+  summary: string;
+  steps: string[];
+  estimated_risk: string;
+  recommended_reviewers: string[];
+  issue_context?: string;
+}
+
+export interface AgentHandoffResponse {
+  status: "success" | "declined" | "error";
+  authorized: boolean;
+  repo_id?: string;
+  issue_number?: number;
+  fork?: {
+    fork_ref: string;
+    fork_url: string;
+    provisioned: boolean;
+  };
+  diff?: string;
+  diff_stats?: DiffStats;
+  decision?: "pr" | "plan";
+  pr?: PullRequestResult | null;
+  plan?: PlanArtifact | null;
+  message: string;
+}
+
+export interface AgentStatusResponse {
+  status: string;
+  agent: string;
+  framework: string;
+  sdk: string;
+  model: string;
+  has_api_key: boolean;
+  capabilities: string[];
+}
+
+/**
+ * Executes the Phase 6 & 7 Google ADK Agent Handoff workflow for a specific issue.
+ */
+export async function triggerAgentHandoff(
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  optIn: boolean = true,
+  userNotes?: string
+): Promise<AgentHandoffResponse> {
+  const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/issues/${issueNumber}/handoff`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      opt_in: optIn,
+      user_notes: userNotes || null,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to execute agent handoff");
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetches Google ADK agent system status and model capabilities.
+ */
+export async function getAgentStatus(): Promise<AgentStatusResponse> {
+  const response = await fetch(`${BACKEND_URL}/api/agent/status`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch agent status");
+  }
+  return response.json();
+}
+
+/**
+ * Sends a message to the interactive Google ADK agent chat endpoint.
+ */
+export async function chatWithAgent(
+  message: string,
+  sessionId?: string
+): Promise<{ status: string; session_id: string; response: string }> {
+  const response = await fetch(`${BACKEND_URL}/api/agent/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message,
+      session_id: sessionId || null,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to chat with agent");
+  }
+
+  return response.json();
+}
+

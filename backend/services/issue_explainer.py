@@ -127,26 +127,15 @@ async def generate_issue_explanation(
         return _generate_grounded_fallback(issue_data, graph_contexts, repo_id, issue_number, now_iso)
 
     model_name = settings.effective_model
-    base_url = settings.effective_base_url
 
     graph_digest = format_issue_graph_digest(graph_contexts)
     title = issue_data.get("title", "")
     body = issue_data.get("body", "")
 
     try:
-        from openai import OpenAI
+        from google import genai
 
-        client_kwargs: Dict[str, Any] = {
-            "api_key": api_key,
-            "default_headers": {
-                "HTTP-Referer": "http://localhost:3000",
-                "X-Title": "flux",
-            }
-        }
-        if base_url:
-            client_kwargs["base_url"] = base_url
-
-        client = OpenAI(**client_kwargs)
+        client = genai.Client(api_key=api_key)
 
         system_prompt = (
             "You are an expert senior software engineer onboarding a new contributor to resolve a GitHub issue. "
@@ -176,20 +165,19 @@ async def generate_issue_explanation(
             "Analyze the issue and generate the structured JSON explanation."
         )
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
+        full_prompt = f"{system_prompt}\n\n{user_prompt}"
 
-        # Use standard chat.completions.create with json_object format for universal model compatibility
-        completion = client.chat.completions.create(
+        response = client.models.generate_content(
             model=model_name,
-            messages=messages,
-            response_format={"type": "json_object"},
-            temperature=0.2,
+            contents=full_prompt,
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": LLMIssueExplanationSchema,
+                "temperature": 0.2,
+            },
         )
 
-        raw_text = completion.choices[0].message.content or "{}"
+        raw_text = response.text or "{}"
         if "```" in raw_text:
             raw_text = raw_text.split("```json")[-1].split("```")[0].strip()
 

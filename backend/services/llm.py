@@ -171,23 +171,11 @@ async def generate_repository_understanding(
         return _generate_grounded_fallback(repo_data, digest, repo_id, now_iso)
 
     model_name = settings.effective_model
-    base_url = settings.effective_base_url
 
     try:
-        from openai import OpenAI
+        from google import genai
 
-        # Initialize client (compatible with OpenAI, OpenRouter, Groq, etc.)
-        client_kwargs: Dict[str, Any] = {
-            "api_key": api_key,
-            "default_headers": {
-                "HTTP-Referer": "http://localhost:3000",
-                "X-Title": "flux",
-            }
-        }
-        if base_url:
-            client_kwargs["base_url"] = base_url
-
-        client = OpenAI(**client_kwargs)
+        client = genai.Client(api_key=api_key)
 
         system_prompt = (
             "You are an expert software architect analyzing an open-source codebase for new contributors. "
@@ -211,36 +199,24 @@ async def generate_repository_understanding(
             "Generate the structured JSON repository understanding."
         )
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
+        full_prompt = f"{system_prompt}\n\n{user_prompt}"
 
-        # Attempt structured call compatible with both OpenAI and OpenRouter models (including DeepSeek)
-        parsed_data: Optional[LLMUnderstandingSchema] = None
+        # Generate structured JSON using Google GenAI SDK
+        response = client.models.generate_content(
+            model=model_name,
+            contents=full_prompt,
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": LLMUnderstandingSchema,
+                "temperature": 0.2,
+            },
+        )
 
-        try:
-            # First try client.beta.chat.completions.parse (OpenAI native)
-            completion = client.beta.chat.completions.parse(
-                model=model_name,
-                messages=messages,
-                response_format=LLMUnderstandingSchema,
-                temperature=0.2,
-            )
-            parsed_data = completion.choices[0].message.parsed
-        except Exception:
-            # Fallback to standard chat.completions.create with json_object format (OpenRouter / DeepSeek / others)
-            completion = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                response_format={"type": "json_object"},
-                temperature=0.2,
-            )
-            raw_text = completion.choices[0].message.content or "{}"
-            if "```" in raw_text:
-                raw_text = raw_text.split("```json")[-1].split("```")[0].strip()
-            data_dict = json.loads(raw_text)
-            parsed_data = LLMUnderstandingSchema.model_validate(data_dict)
+        raw_text = response.text or "{}"
+        if "```" in raw_text:
+            raw_text = raw_text.split("```json")[-1].split("```")[0].strip()
+        data_dict = json.loads(raw_text)
+        parsed_data = LLMUnderstandingSchema.model_validate(data_dict)
 
         if not parsed_data:
             raise ValueError("LLM returned empty structured response.")

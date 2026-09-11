@@ -14,6 +14,7 @@ from api.graph import router as graph_router
 from api.understanding import router as understanding_router
 from api.files import router as files_router
 from api.issues import router as issues_router
+from api.agent import router as agent_router
 
 
 @asynccontextmanager
@@ -48,6 +49,7 @@ app.include_router(graph_router)
 app.include_router(understanding_router)
 app.include_router(files_router)
 app.include_router(issues_router)
+app.include_router(agent_router)
 
 
 @app.get("/api/health", tags=["system"])
