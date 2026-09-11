@@ -1,14 +1,6 @@
 "use client";
 
-/**
- * ObsidianGraphCanvas.tsx
- * Akaru Prestige Edition: AST Dependency Network Explorer.
- * Features:
- * - Deterministic, static node layout (no uncontrolled drift).
- * - Continuous high-frequency network micro-animations (warm terracotta pulses, radar ripples, laser flow arrows).
- * - Akaru color schema: Warm Terracotta (#e49366), gallery near-black (#0e0e0e), crisp white (#ffffff).
- * - Interactive hover pop-up card and deep node inspection.
- */
+// Interactive AST dependency network explorer canvas with warm gallery styling.
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { GraphResponse, GraphNode, GraphEdge } from "../lib/api";
@@ -652,24 +644,24 @@ export default function ObsidianGraphCanvas({
   return (
     <div className="graph-shell akaru-card overflow-hidden shadow-2xl relative select-none">
       {/* Top Controls Toolbar */}
-      <div className="graph-toolbar flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-white/10 bg-[#161616] text-xs">
+      <div className="graph-toolbar flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-[rgba(23,24,23,0.1)] bg-[#fffefa]/95 text-xs text-[#171817]">
         {/* Left: Summary Metrics & Search */}
         <div className="flex flex-wrap items-center gap-3.5">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#e49366] animate-pulse"></span>
-            <span className="font-bold text-white uppercase tracking-wider text-[11px]">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#df7d4c] animate-pulse"></span>
+            <span className="font-bold text-[#171817] uppercase tracking-wider text-[11px]">
               Dependency Network
             </span>
           </div>
-          <span className="text-white/20">|</span>
-          <span className="text-white font-medium">{graph.metrics.total_nodes} modules</span>
-          <span className="text-white/20">&bull;</span>
-          <span className="text-white font-medium">{graph.metrics.total_edges} connections</span>
+          <span className="text-[rgba(23,24,23,0.2)]">|</span>
+          <span className="text-[#171817] font-medium">{graph.metrics.total_nodes} modules</span>
+          <span className="text-[rgba(23,24,23,0.2)]">&bull;</span>
+          <span className="text-[#171817] font-medium">{graph.metrics.total_edges} connections</span>
 
           {/* Quick Node Search */}
           <div className="relative ml-2">
-            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-[#0e0e0e] border border-white/15 rounded-xl focus-within:border-[#e49366] transition-all">
-              <Search className="w-3.5 h-3.5 text-[#e49366]" />
+            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-[#f4efe6] border border-[rgba(23,24,23,0.12)] rounded-xl focus-within:border-[#df7d4c] transition-all">
+              <Search className="w-3.5 h-3.5 text-[#df7d4c]" />
               <input
                 type="text"
                 value={searchQuery}
@@ -679,11 +671,11 @@ export default function ObsidianGraphCanvas({
                 }}
                 onFocus={() => setIsSearchOpen(true)}
                 placeholder="Find node or module..."
-                className="bg-transparent text-white placeholder-white/40 text-xs focus:outline-none w-44 font-code"
+                className="bg-transparent text-[#171817] placeholder-[rgba(23,24,23,0.45)] text-xs focus:outline-none w-44 font-code"
               />
             </div>
             {isSearchOpen && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 mt-2 w-72 akaru-dropdown shadow-2xl z-40 py-2 max-h-52 overflow-y-auto">
+              <div className="absolute top-full left-0 mt-2 w-72 akaru-dropdown shadow-2xl z-40 py-2 max-h-52 overflow-y-auto bg-[#fffefa] border border-[rgba(23,24,23,0.14)] rounded-xl">
                 {searchResults.map((res) => (
                   <button
                     key={res.id}
@@ -693,10 +685,10 @@ export default function ObsidianGraphCanvas({
                       setIsSearchOpen(false);
                       setSearchQuery("");
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-[#222222] text-xs font-code text-white hover:text-[#e49366] flex items-center justify-between group cursor-pointer"
+                    className="w-full text-left px-4 py-2 hover:bg-[rgba(223,125,76,0.08)] text-xs font-code text-[#171817] hover:text-[#df7d4c] flex items-center justify-between group cursor-pointer transition-colors"
                   >
                     <span className="truncate">{res.id}</span>
-                    <span className="text-[10px] text-white/50 group-hover:text-[#e49366]">
+                    <span className="text-[10px] text-[rgba(23,24,23,0.45)] group-hover:text-[#df7d4c]">
                       deg:{res.in_degree + res.out_degree}
                     </span>
                   </button>
@@ -717,7 +709,7 @@ export default function ObsidianGraphCanvas({
                   e.target.value === "all" ? "all" : parseInt(e.target.value, 10)
                 )
               }
-              className="px-3.5 py-1.5 bg-[#0e0e0e] border border-white/20 rounded-xl text-xs text-white focus:outline-none cursor-pointer hover:border-[#e49366]"
+              className="px-3.5 py-1.5 bg-[#fffefa] border border-[rgba(23,24,23,0.14)] rounded-xl text-xs text-[#171817] focus:outline-none cursor-pointer hover:border-[#df7d4c] shadow-xs"
             >
               <option value="all">All Clusters ({availableClusters.length})</option>
               {availableClusters.map((c) => (
@@ -732,10 +724,10 @@ export default function ObsidianGraphCanvas({
           <button
             type="button"
             onClick={() => setMinDegreeFilter((prev) => (prev === 0 ? 1 : prev === 1 ? 2 : 0))}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 shadow-xs ${
               minDegreeFilter > 0
-                ? "bg-[#e49366] text-[#0e0e0e] border-[#e49366]"
-                : "bg-white text-[#0e0e0e] border-white hover:bg-[#f2f2f2]"
+                ? "bg-[#df7d4c] text-[#fffdf8] border-[#df7d4c]"
+                : "bg-[#fffefa] text-[#171817] border-[rgba(23,24,23,0.14)] hover:bg-[rgba(23,24,23,0.04)]"
             }`}
           >
             <Filter className="w-3.5 h-3.5" />
@@ -748,12 +740,12 @@ export default function ObsidianGraphCanvas({
             </span>
           </button>
 
-          {/* Zoom Buttons with Bright Non-Dark Styling */}
-          <div className="flex items-center bg-white text-[#0e0e0e] rounded-xl overflow-hidden shadow-sm font-bold">
+          {/* Zoom Buttons with Warm Gallery Styling */}
+          <div className="flex items-center bg-[#fffefa] text-[#171817] border border-[rgba(23,24,23,0.14)] rounded-xl overflow-hidden shadow-xs font-bold">
             <button
               type="button"
               onClick={() => setZoom((z) => Math.min(z * 1.2, 3.5))}
-              className="p-2 hover:bg-slate-100 text-[#0e0e0e] transition-colors cursor-pointer"
+              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer"
               title="Zoom In"
             >
               <Plus className="w-4 h-4" />
@@ -761,7 +753,7 @@ export default function ObsidianGraphCanvas({
             <button
               type="button"
               onClick={() => setZoom((z) => Math.max(z * 0.8, 0.3))}
-              className="p-2 hover:bg-slate-100 text-[#0e0e0e] transition-colors cursor-pointer border-l border-slate-200"
+              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer border-l border-[rgba(23,24,23,0.1)]"
               title="Zoom Out"
             >
               <Minus className="w-4 h-4" />
@@ -769,7 +761,7 @@ export default function ObsidianGraphCanvas({
             <button
               type="button"
               onClick={handleZoomToFit}
-              className="p-2 hover:bg-slate-100 text-[#0e0e0e] transition-colors cursor-pointer border-l border-slate-200"
+              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer border-l border-[rgba(23,24,23,0.1)]"
               title="Fit to Screen"
             >
               <Maximize2 className="w-4 h-4" />
@@ -780,7 +772,7 @@ export default function ObsidianGraphCanvas({
                 setZoom(1);
                 setPan({ x: 0, y: 0 });
               }}
-              className="p-2 hover:bg-slate-100 text-[#0e0e0e] transition-colors cursor-pointer border-l border-slate-200"
+              className="p-2 hover:bg-[rgba(23,24,23,0.05)] text-[#171817] transition-colors cursor-pointer border-l border-[rgba(23,24,23,0.1)]"
               title="Reset View"
             >
               <RotateCcw className="w-4 h-4" />
@@ -790,7 +782,7 @@ export default function ObsidianGraphCanvas({
       </div>
 
       {/* Interactive Canvas Viewport */}
-      <div className="graph-viewport relative w-full h-[580px] bg-[#0e0e0e] overflow-hidden">
+      <div className="graph-viewport relative w-full h-[580px] bg-[#fbfaf6] overflow-hidden">
         <canvas
           ref={canvasRef}
           onMouseDown={handleMouseDown}
@@ -804,34 +796,34 @@ export default function ObsidianGraphCanvas({
         {/* Dynamic Interactive Hover Pop-Up Card */}
         {hoveredNode && hoverScreenPos && !selectedNode && (
           <div
-            className="absolute z-30 pointer-events-none akaru-dropdown p-4 shadow-2xl border border-[#e49366]/40 text-xs text-white transition-opacity duration-150 space-y-2.5 min-w-64"
+            className="absolute z-30 pointer-events-none akaru-dropdown p-4 shadow-2xl border border-[#df7d4c]/40 text-xs text-[#171817] bg-[#fffefa]/98 transition-opacity duration-150 space-y-2.5 min-w-64"
             style={{
               left: Math.min(Math.max(hoverScreenPos.x + 18, 14), 660),
               top: Math.min(Math.max(hoverScreenPos.y - 40, 14), 440),
             }}
           >
-            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
-              <span className="font-bold text-white truncate max-w-44 text-sm">{hoveredNode.label}</span>
-              <span className="text-[10px] px-2 py-0.5 bg-[#e49366] text-[#0e0e0e] rounded-md font-bold uppercase">
+            <div className="flex items-center justify-between gap-2 border-b border-[rgba(23,24,23,0.1)] pb-2">
+              <span className="font-bold text-[#171817] truncate max-w-44 text-sm">{hoveredNode.label}</span>
+              <span className="text-[10px] px-2 py-0.5 bg-[#df7d4c] text-[#fffdf8] rounded-md font-bold uppercase">
                 {hoveredNode.language}
               </span>
             </div>
-            <div className="text-[11px] font-code text-[#9e9e9e] truncate">{hoveredNode.id}</div>
+            <div className="text-[11px] font-code text-[#77756f] truncate">{hoveredNode.id}</div>
             <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-              <div className="p-1.5 bg-[#171717] rounded-lg border border-white/10">
-                <div className="text-[9px] text-[#9e9e9e] uppercase font-bold">Callers</div>
-                <strong className="text-white text-xs">{hoveredNode.in_degree}</strong>
+              <div className="p-1.5 bg-[rgba(23,24,23,0.04)] rounded-lg border border-[rgba(23,24,23,0.08)]">
+                <div className="text-[9px] text-[#77756f] uppercase font-bold">Callers</div>
+                <strong className="text-[#171817] text-xs">{hoveredNode.in_degree}</strong>
               </div>
-              <div className="p-1.5 bg-[#171717] rounded-lg border border-white/10">
-                <div className="text-[9px] text-[#9e9e9e] uppercase font-bold">Imports</div>
-                <strong className="text-[#e49366] text-xs">{hoveredNode.out_degree}</strong>
+              <div className="p-1.5 bg-[rgba(23,24,23,0.04)] rounded-lg border border-[rgba(23,24,23,0.08)]">
+                <div className="text-[9px] text-[#77756f] uppercase font-bold">Imports</div>
+                <strong className="text-[#df7d4c] text-xs">{hoveredNode.out_degree}</strong>
               </div>
-              <div className="p-1.5 bg-[#171717] rounded-lg border border-white/10">
-                <div className="text-[9px] text-[#9e9e9e] uppercase font-bold">Lines</div>
-                <strong className="text-white text-xs">{hoveredNode.line_count}</strong>
+              <div className="p-1.5 bg-[rgba(23,24,23,0.04)] rounded-lg border border-[rgba(23,24,23,0.08)]">
+                <div className="text-[9px] text-[#77756f] uppercase font-bold">Lines</div>
+                <strong className="text-[#171817] text-xs">{hoveredNode.line_count}</strong>
               </div>
             </div>
-            <div className="text-[10px] text-[#e49366] pt-0.5 flex items-center justify-between font-semibold">
+            <div className="text-[10px] text-[#df7d4c] pt-0.5 flex items-center justify-between font-semibold">
               <span>Click node to inspect AST &amp; code</span>
               <span>&rarr;</span>
             </div>
@@ -839,19 +831,19 @@ export default function ObsidianGraphCanvas({
         )}
 
         {/* Legend Overlay */}
-        <div className="absolute top-4 left-4 flex items-center gap-4 text-xs font-semibold akaru-card-sm px-4 py-2 text-white pointer-events-none shadow-lg">
+        <div className="absolute top-4 left-4 flex items-center gap-4 text-xs font-semibold akaru-card-sm px-4 py-2 text-[#171817] pointer-events-none shadow-md">
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#171817]"></span>
             <span>Caller (Inbound)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#e49366]"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#df7d4c]"></span>
             <span>Import (Outbound)</span>
           </div>
         </div>
 
         {/* Instructions Footer */}
-        <div className="absolute bottom-4 left-4 text-[11px] text-[#9e9e9e] akaru-card-sm px-3.5 py-1.5 pointer-events-none shadow-lg font-medium">
+        <div className="absolute bottom-4 left-4 text-[11px] text-[#77756f] akaru-card-sm px-3.5 py-1.5 pointer-events-none shadow-md font-medium">
           Click any module to inspect AST &bull; Drag to pan &bull; Scroll to zoom
         </div>
 

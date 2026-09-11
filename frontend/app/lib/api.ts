@@ -1,8 +1,4 @@
-/**
- * API client module for interacting with the flux FastAPI backend.
- * Handles repository ingestion requests and metadata fetching.
- */
-
+// API client module for interacting with the flux FastAPI backend.
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
 
 export interface RepoMetadata {
@@ -33,13 +29,7 @@ export interface IngestResponse {
   repository: RepoMetadata;
 }
 
-/**
- * Ingests a repository by its GitHub URL or shorthand (owner/repo).
- * Clones the repository locally and returns metadata and documentation.
- *
- * @param url Full GitHub URL or owner/repo format.
- * @param forceRefresh Optional flag to force re-cloning if already present.
- */
+// Ingests a repository by its GitHub URL or shorthand and returns metadata.
 export async function ingestRepository(
   url: string,
   forceRefresh: boolean = false
@@ -64,12 +54,7 @@ export async function ingestRepository(
   return response.json();
 }
 
-/**
- * Fetches the metadata and documentation of an ingested repository.
- *
- * @param owner Repository owner/org
- * @param repo Repository name
- */
+// Fetches the metadata and documentation of an ingested repository.
 export async function getRepository(
   owner: string,
   repo: string
@@ -84,9 +69,7 @@ export async function getRepository(
   return response.json();
 }
 
-/**
- * Fetches a list of recently ingested repositories.
- */
+// Fetches a list of recently ingested repositories.
 export async function listRepositories(): Promise<RepoMetadata[]> {
   const response = await fetch(`${BACKEND_URL}/api/repos`);
   if (!response.ok) {
@@ -145,12 +128,7 @@ export interface GraphResponse {
   updated_at: string;
 }
 
-/**
- * Initiates AST parsing and builds the NetworkX dependency graph for a repository.
- *
- * @param owner Repository owner
- * @param repo Repository name
- */
+// Initiates AST parsing and builds the NetworkX dependency graph for a repository.
 export async function buildRepoGraph(
   owner: string,
   repo: string
@@ -167,12 +145,7 @@ export async function buildRepoGraph(
   return response.json();
 }
 
-/**
- * Fetches the existing dependency graph for a repository if already computed.
- *
- * @param owner Repository owner
- * @param repo Repository name
- */
+// Fetches the existing dependency graph for a repository if already computed.
 export async function getRepoGraph(
   owner: string,
   repo: string
@@ -214,12 +187,7 @@ export interface RepoUnderstanding {
   created_at: string;
 }
 
-/**
- * Generates plain-English repository understanding (overview, feature map, architecture).
- *
- * @param owner Repository owner
- * @param repo Repository name
- */
+// Generates plain-English repository understanding from digest context.
 export async function generateRepoUnderstanding(
   owner: string,
   repo: string
@@ -236,12 +204,7 @@ export async function generateRepoUnderstanding(
   return response.json();
 }
 
-/**
- * Fetches cached repository understanding if already computed.
- *
- * @param owner Repository owner
- * @param repo Repository name
- */
+// Fetches cached repository understanding if already computed.
 export async function getRepoUnderstanding(
   owner: string,
   repo: string
@@ -267,13 +230,7 @@ export interface FileContentResponse {
   error?: string | null;
 }
 
-/**
- * Fetches the source code content of a file in the repository workspace.
- *
- * @param owner Repository owner
- * @param repo Repository name
- * @param path Relative path inside workspace
- */
+// Fetches the source code content of a file in the repository workspace.
 export async function fetchFileContent(
   owner: string,
   repo: string,
@@ -334,9 +291,7 @@ export interface IssueListResponse {
   issues: IssueSummary[];
 }
 
-/**
- * Fetches open issues for a repository with optional label filtering.
- */
+// Fetches open issues for a repository with optional label filtering.
 export async function fetchRepoIssues(
   owner: string,
   repo: string,
@@ -364,9 +319,7 @@ export async function fetchRepoIssues(
   return response.json();
 }
 
-/**
- * Generates or retrieves an on-demand plain-English explanation for a specific issue.
- */
+// Generates or retrieves an on-demand plain-English explanation for a specific issue.
 export async function explainIssue(
   owner: string,
   repo: string,
@@ -382,9 +335,7 @@ export async function explainIssue(
   return response.json();
 }
 
-/**
- * Seeds a demo issue for testing when a repository has 0 open GitHub issues.
- */
+// Seeds a demo issue for testing when a repository has 0 open GitHub issues.
 export async function seedDemoIssue(
   owner: string,
   repo: string
@@ -476,9 +427,7 @@ export interface AgentStatusResponse {
   capabilities: string[];
 }
 
-/**
- * Retrieves cached agent handoff results (PR or Plan Artifact) for an issue if previously executed.
- */
+// Retrieves cached agent handoff results for an issue if previously executed.
 export async function getHandoffResult(
   owner: string,
   repo: string,
@@ -493,9 +442,7 @@ export async function getHandoffResult(
   }
 }
 
-/**
- * Executes the Google ADK Agent Handoff workflow for a specific issue.
- */
+// Executes the Google ADK Agent Handoff workflow for a specific issue.
 export async function triggerAgentHandoff(
 
   owner: string,
@@ -523,9 +470,7 @@ export async function triggerAgentHandoff(
   return response.json();
 }
 
-/**
- * Publishes a verified code patch as a GitHub Pull Request after developer review.
- */
+// Publishes a verified code patch as a GitHub Pull Request after developer review.
 export async function publishPullRequest(
   owner: string,
   repo: string,
@@ -548,9 +493,7 @@ export async function publishPullRequest(
   return response.json();
 }
 
-/**
- * Discards local workspace modifications and rolls back the temporary fix branch.
- */
+// Discards local workspace modifications and rolls back the temporary fix branch.
 export async function rollbackHandoff(
   owner: string,
   repo: string,
@@ -571,9 +514,7 @@ export async function rollbackHandoff(
   return response.json();
 }
 
-/**
- * Fetches Google ADK agent system status and model capabilities.
- */
+// Fetches Google ADK agent system status and model capabilities.
 export async function getAgentStatus(): Promise<AgentStatusResponse> {
   const response = await fetch(`${BACKEND_URL}/api/agent/status`);
   if (!response.ok) {
@@ -582,9 +523,7 @@ export async function getAgentStatus(): Promise<AgentStatusResponse> {
   return response.json();
 }
 
-/**
- * Sends a message to the interactive Google ADK agent chat endpoint.
- */
+// Sends a message to the interactive Google ADK agent chat endpoint.
 export async function chatWithAgent(
   message: string,
   sessionId?: string

@@ -32,23 +32,24 @@ def clone_repository(clone_url: str, target_dir: Path, force_refresh: bool = Fal
     target_dir.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["git", "clone", "--depth", "1", clone_url, str(target_dir)]
     try:
-        subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=120)
+        subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=settings.git_clone_timeout)
     except subprocess.CalledProcessError as e:
         error_msg = e.stderr.strip() or e.stdout.strip() or "Git clone failed"
         raise RuntimeError(f"Failed to clone repository: {error_msg}")
     except subprocess.TimeoutExpired:
-        raise RuntimeError("Git clone timed out after 120 seconds")
+        raise RuntimeError(f"Git clone timed out after {settings.git_clone_timeout} seconds")
 
     return target_dir
 
 
 # Safely reads file contents up to a maximum character cap.
-def read_file_safely(file_path: Path, max_chars: int = 100_000) -> Optional[str]:
+def read_file_safely(file_path: Path, max_chars: Optional[int] = None) -> Optional[str]:
     if not file_path.is_file():
         return None
+    effective_max = max_chars or settings.max_read_chars
     try:
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-            return f.read(max_chars)
+            return f.read(effective_max)
     except Exception:
         return None
 

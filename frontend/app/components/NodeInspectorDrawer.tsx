@@ -1,9 +1,6 @@
 "use client";
 
-/**
- * NodeInspectorDrawer.tsx
- * Akaru Prestige Edition: AST Node & Code Inspector Drawer.
- */
+// Drawer component for deep AST node inspection and source viewing.
 
 import React, { useState, useEffect } from "react";
 import { GraphNode, GraphEdge, fetchFileContent, FileContentResponse } from "../lib/api";
@@ -28,6 +25,7 @@ interface NodeInspectorDrawerProps {
   onSelectNode: (nodeId: string) => void;
 }
 
+// Renders slide-in drawer with graph connections, AST symbols, and live code.
 export default function NodeInspectorDrawer({
   owner,
   repo,
@@ -52,30 +50,28 @@ export default function NodeInspectorDrawer({
     .map((e) => e.target);
 
   useEffect(() => {
-    if (activeTab !== "code") return;
-    let isMounted = true;
-    setCodeLoading(true);
-    setCodeError(null);
-
-    fetchFileContent(owner, repo, node.id)
-      .then((data) => {
-        if (isMounted) {
+    if (activeTab === "code" && !codeData && !codeLoading) {
+      setCodeLoading(true);
+      setCodeError(null);
+      fetchFileContent(owner, repo, node.id)
+        .then((data) => {
           setCodeData(data);
           setCodeLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setCodeError(err.message || "Failed to load file contents");
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Failed to load source file.";
+          setCodeError(msg);
           setCodeLoading(false);
-        }
-      });
+        });
+    }
+  }, [activeTab, codeData, codeLoading, owner, repo, node.id]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [owner, repo, node.id, activeTab]);
+  useEffect(() => {
+    setCodeData(null);
+    setCodeError(null);
+  }, [node.id]);
 
+  // Copies text to clipboard and shows transient confirmation.
   const copyToClipboard = (text: string, type: "path" | "code") => {
     navigator.clipboard.writeText(text);
     if (type === "path") {
@@ -88,35 +84,35 @@ export default function NodeInspectorDrawer({
   };
 
   return (
-    <div className="absolute top-0 right-0 h-full w-[430px] max-w-full akaru-dropdown border-l border-white/20 shadow-2xl z-40 flex flex-col transition-all duration-300">
+    <div className="node-inspector-drawer absolute top-0 right-0 h-full w-[430px] max-w-full bg-[#fffefa]/98 backdrop-blur-2xl border-l border-[rgba(23,24,23,0.14)] shadow-2xl z-40 flex flex-col transition-all duration-300 text-[#171817]">
       {/* Drawer Header */}
-      <div className="p-6 border-b border-white/10 bg-[#141414] flex items-start justify-between gap-4">
+      <div className="p-6 border-b border-[rgba(23,24,23,0.1)] bg-[rgba(247,244,236,0.65)] flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-2">
-            <span className="px-2.5 py-0.5 text-[10px] font-code uppercase tracking-wider rounded-md bg-[#e49366] text-[#0e0e0e] font-bold">
+            <span className="px-2.5 py-0.5 text-[10px] font-code uppercase tracking-wider rounded-md bg-[#df7d4c] text-[#fffdf8] font-bold">
               {node.language}
             </span>
-            <span className="px-2.5 py-0.5 text-[10px] font-code bg-white/10 text-white rounded-md border border-white/20">
+            <span className="px-2.5 py-0.5 text-[10px] font-code bg-[rgba(23,24,23,0.06)] text-[#171817] rounded-md border border-[rgba(23,24,23,0.12)]">
               Cluster #{node.cluster}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <FileCode className="w-4 h-4 text-[#e49366] shrink-0" />
-            <h3 className="text-base font-bold text-white truncate" title={node.id}>
+            <FileCode className="w-4 h-4 text-[#df7d4c] shrink-0" />
+            <h3 className="text-base font-bold text-[#171817] truncate" title={node.id}>
               {node.label}
             </h3>
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-[11px] font-code text-[#9e9e9e] truncate max-w-xs" title={node.id}>
+            <p className="text-[11px] font-code text-[#77756f] truncate max-w-xs" title={node.id}>
               {node.id}
             </p>
             <button
               type="button"
               onClick={() => copyToClipboard(node.id, "path")}
-              className="text-white/60 hover:text-[#e49366] transition-colors p-0.5 cursor-pointer"
+              className="text-[rgba(23,24,23,0.5)] hover:text-[#df7d4c] transition-colors p-0.5 cursor-pointer"
               title="Copy file path"
             >
-              {copiedPath ? <Check className="w-3.5 h-3.5 text-[#e49366]" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedPath ? <Check className="w-3.5 h-3.5 text-[#df7d4c]" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           </div>
         </div>
@@ -124,7 +120,7 @@ export default function NodeInspectorDrawer({
         <button
           type="button"
           onClick={onClose}
-          className="p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+          className="p-2 rounded-xl text-[#77756f] hover:text-[#171817] hover:bg-[rgba(23,24,23,0.08)] transition-colors cursor-pointer"
           title="Close Inspector"
         >
           <X className="w-5 h-5" />
@@ -132,36 +128,36 @@ export default function NodeInspectorDrawer({
       </div>
 
       {/* Metrics Strip */}
-      <div className="grid grid-cols-4 gap-2.5 p-4 bg-[#0e0e0e] border-b border-white/10 text-center">
-        <div className="p-2 bg-[#171717] rounded-xl border border-white/10">
-          <div className="text-[10px] text-[#9e9e9e] uppercase font-bold">In-Degree</div>
-          <div className="font-bold text-white text-sm mt-0.5">{node.in_degree}</div>
+      <div className="grid grid-cols-4 gap-2.5 p-4 bg-[rgba(247,244,236,0.8)] border-b border-[rgba(23,24,23,0.1)] text-center">
+        <div className="p-2 bg-[#fffefa] rounded-xl border border-[rgba(23,24,23,0.08)] shadow-xs">
+          <div className="text-[10px] text-[#77756f] uppercase font-bold">In-Degree</div>
+          <div className="font-bold text-[#171817] text-sm mt-0.5">{node.in_degree}</div>
         </div>
-        <div className="p-2 bg-[#171717] rounded-xl border border-white/10">
-          <div className="text-[10px] text-[#9e9e9e] uppercase font-bold">Out-Degree</div>
-          <div className="font-bold text-[#e49366] text-sm mt-0.5">{node.out_degree}</div>
+        <div className="p-2 bg-[#fffefa] rounded-xl border border-[rgba(23,24,23,0.08)] shadow-xs">
+          <div className="text-[10px] text-[#77756f] uppercase font-bold">Out-Degree</div>
+          <div className="font-bold text-[#df7d4c] text-sm mt-0.5">{node.out_degree}</div>
         </div>
-        <div className="p-2 bg-[#171717] rounded-xl border border-white/10">
-          <div className="text-[10px] text-[#9e9e9e] uppercase font-bold">Centrality</div>
-          <div className="font-bold text-white text-sm mt-0.5">
+        <div className="p-2 bg-[#fffefa] rounded-xl border border-[rgba(23,24,23,0.08)] shadow-xs">
+          <div className="text-[10px] text-[#77756f] uppercase font-bold">Centrality</div>
+          <div className="font-bold text-[#171817] text-sm mt-0.5">
             {node.centrality ? node.centrality.toFixed(3) : "0.000"}
           </div>
         </div>
-        <div className="p-2 bg-[#171717] rounded-xl border border-white/10">
-          <div className="text-[10px] text-[#9e9e9e] uppercase font-bold">Lines</div>
-          <div className="font-bold text-white text-sm mt-0.5">{node.line_count}</div>
+        <div className="p-2 bg-[#fffefa] rounded-xl border border-[rgba(23,24,23,0.08)] shadow-xs">
+          <div className="text-[10px] text-[#77756f] uppercase font-bold">Lines</div>
+          <div className="font-bold text-[#171817] text-sm mt-0.5">{node.line_count}</div>
         </div>
       </div>
 
-      {/* Drawer Tabs with Bright Active States */}
-      <div className="flex border-b border-white/10 text-xs bg-[#141414]">
+      {/* Drawer Tabs with Terracotta Active State */}
+      <div className="flex border-b border-[rgba(23,24,23,0.1)] text-xs bg-[rgba(255,254,250,0.9)]">
         <button
           type="button"
           onClick={() => setActiveTab("connections")}
           className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 ${
             activeTab === "connections"
-              ? "text-[#e49366] border-[#e49366] bg-white/5 font-bold"
-              : "text-white/60 border-transparent hover:text-white"
+              ? "text-[#df7d4c] border-[#df7d4c] bg-[rgba(223,125,76,0.08)] font-bold"
+              : "text-[#77756f] border-transparent hover:text-[#171817]"
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
@@ -172,8 +168,8 @@ export default function NodeInspectorDrawer({
           onClick={() => setActiveTab("symbols")}
           className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 ${
             activeTab === "symbols"
-              ? "text-[#e49366] border-[#e49366] bg-white/5 font-bold"
-              : "text-white/60 border-transparent hover:text-white"
+              ? "text-[#df7d4c] border-[#df7d4c] bg-[rgba(223,125,76,0.08)] font-bold"
+              : "text-[#77756f] border-transparent hover:text-[#171817]"
           }`}
         >
           <Code2 className="w-3.5 h-3.5" />
@@ -184,8 +180,8 @@ export default function NodeInspectorDrawer({
           onClick={() => setActiveTab("code")}
           className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 ${
             activeTab === "code"
-              ? "text-[#e49366] border-[#e49366] bg-white/5 font-bold"
-              : "text-white/60 border-transparent hover:text-white"
+              ? "text-[#df7d4c] border-[#df7d4c] bg-[rgba(223,125,76,0.08)] font-bold"
+              : "text-[#77756f] border-transparent hover:text-[#171817]"
           }`}
         >
           <Terminal className="w-3.5 h-3.5" />
@@ -200,15 +196,15 @@ export default function NodeInspectorDrawer({
           <div className="space-y-4">
             {/* Inbound Callers */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold text-white">
-                <span className="flex items-center gap-1.5 text-white">
-                  <ArrowDownLeft className="w-4 h-4 text-[#e49366]" />
+              <div className="flex items-center justify-between text-xs font-bold text-[#171817]">
+                <span className="flex items-center gap-1.5 text-[#171817]">
+                  <ArrowDownLeft className="w-4 h-4 text-[#df7d4c]" />
                   Imported by ({inboundDependencies.length})
                 </span>
-                <span className="text-[10px] text-[#9e9e9e] font-normal">Callers</span>
+                <span className="text-[10px] text-[#77756f] font-normal">Callers</span>
               </div>
               {inboundDependencies.length === 0 ? (
-                <p className="text-[11px] text-[#9e9e9e] italic bg-[#0e0e0e] p-3 rounded-xl border border-white/10">
+                <p className="text-[11px] text-[#77756f] italic bg-[rgba(23,24,23,0.03)] p-3 rounded-xl border border-[rgba(23,24,23,0.08)]">
                   No other files import this module directly.
                 </p>
               ) : (
@@ -218,10 +214,10 @@ export default function NodeInspectorDrawer({
                       key={depId}
                       type="button"
                       onClick={() => onSelectNode(depId)}
-                      className="w-full text-left p-3 rounded-xl bg-[#1a1a1a] hover:bg-[#242424] text-white border border-white/10 hover:border-[#e49366] transition-all flex items-center justify-between group cursor-pointer"
+                      className="w-full text-left p-3 rounded-xl bg-[#fffefa] hover:bg-[rgba(223,125,76,0.04)] text-[#171817] border border-[rgba(23,24,23,0.1)] hover:border-[#df7d4c] transition-all flex items-center justify-between group cursor-pointer shadow-xs"
                     >
                       <span className="truncate font-code text-[11px]">{depId}</span>
-                      <span className="text-[10px] text-[#e49366] shrink-0 ml-2 font-bold">
+                      <span className="text-[10px] text-[#df7d4c] shrink-0 ml-2 font-bold">
                         jump &rarr;
                       </span>
                     </button>
@@ -231,16 +227,16 @@ export default function NodeInspectorDrawer({
             </div>
 
             {/* Outbound Imports */}
-            <div className="space-y-2 pt-3 border-t border-white/10">
-              <div className="flex items-center justify-between text-xs font-bold text-white">
-                <span className="flex items-center gap-1.5 text-[#e49366]">
-                  <ArrowUpRight className="w-4 h-4 text-[#e49366]" />
+            <div className="space-y-2 pt-3 border-t border-[rgba(23,24,23,0.1)]">
+              <div className="flex items-center justify-between text-xs font-bold text-[#171817]">
+                <span className="flex items-center gap-1.5 text-[#df7d4c]">
+                  <ArrowUpRight className="w-4 h-4 text-[#df7d4c]" />
                   Imports ({outboundDependencies.length})
                 </span>
-                <span className="text-[10px] text-[#9e9e9e] font-normal">Dependencies</span>
+                <span className="text-[10px] text-[#77756f] font-normal">Dependencies</span>
               </div>
               {outboundDependencies.length === 0 ? (
-                <p className="text-[11px] text-[#9e9e9e] italic bg-[#0e0e0e] p-3 rounded-xl border border-white/10">
+                <p className="text-[11px] text-[#77756f] italic bg-[rgba(23,24,23,0.03)] p-3 rounded-xl border border-[rgba(23,24,23,0.08)]">
                   No local dependencies imported.
                 </p>
               ) : (
@@ -250,10 +246,10 @@ export default function NodeInspectorDrawer({
                       key={depId}
                       type="button"
                       onClick={() => onSelectNode(depId)}
-                      className="w-full text-left p-3 rounded-xl bg-[#1a1a1a] hover:bg-[#242424] text-white border border-white/10 hover:border-[#e49366] transition-all flex items-center justify-between group cursor-pointer"
+                      className="w-full text-left p-3 rounded-xl bg-[#fffefa] hover:bg-[rgba(223,125,76,0.04)] text-[#171817] border border-[rgba(23,24,23,0.1)] hover:border-[#df7d4c] transition-all flex items-center justify-between group cursor-pointer shadow-xs"
                     >
                       <span className="truncate font-code text-[11px]">{depId}</span>
-                      <span className="text-[10px] text-[#e49366] shrink-0 ml-2 font-bold">
+                      <span className="text-[10px] text-[#df7d4c] shrink-0 ml-2 font-bold">
                         jump &rarr;
                       </span>
                     </button>
@@ -267,13 +263,13 @@ export default function NodeInspectorDrawer({
         {/* TAB 2: AST Symbols */}
         {activeTab === "symbols" && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs text-[#9e9e9e]">
+            <div className="flex items-center justify-between text-xs text-[#77756f]">
               <span>Parsed AST Symbols</span>
-              <span className="font-code text-white font-bold">{node.symbols ? node.symbols.length : 0} items</span>
+              <span className="font-code text-[#171817] font-bold">{node.symbols ? node.symbols.length : 0} items</span>
             </div>
 
             {!node.symbols || node.symbols.length === 0 ? (
-              <p className="text-[11px] text-[#9e9e9e] italic bg-[#0e0e0e] p-4 rounded-xl border border-white/10">
+              <p className="text-[11px] text-[#77756f] italic bg-[rgba(23,24,23,0.03)] p-4 rounded-xl border border-[rgba(23,24,23,0.08)]">
                 No function or class definitions extracted from this file.
               </p>
             ) : (
@@ -281,18 +277,18 @@ export default function NodeInspectorDrawer({
                 {node.symbols.map((sym, idx) => (
                   <div
                     key={idx}
-                    className="p-3 bg-[#1a1a1a] rounded-xl border border-white/10 space-y-1"
+                    className="p-3 bg-[#fffefa] rounded-xl border border-[rgba(23,24,23,0.1)] space-y-1 shadow-xs"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-white font-code text-[11px] truncate">
+                      <span className="font-bold text-[#171817] font-code text-[11px] truncate">
                         {sym.name}
                       </span>
-                      <span className="text-[9px] px-2 py-0.5 bg-[#e49366] text-[#0e0e0e] rounded-md font-bold uppercase font-code">
+                      <span className="text-[9px] px-2 py-0.5 bg-[#df7d4c] text-[#fffdf8] rounded-md font-bold uppercase font-code">
                         {sym.type || "symbol"}
                       </span>
                     </div>
                     {sym.start_line && (
-                      <div className="text-[10px] text-[#9e9e9e] font-code">
+                      <div className="text-[10px] text-[#77756f] font-code">
                         Lines {sym.start_line} - {sym.end_line}
                       </div>
                     )}
@@ -307,32 +303,32 @@ export default function NodeInspectorDrawer({
         {activeTab === "code" && (
           <div className="space-y-3">
             {codeLoading && (
-              <div className="p-8 text-center text-[#9e9e9e] text-xs">
+              <div className="p-8 text-center text-[#77756f] text-xs">
                 Loading source from workspace...
               </div>
             )}
 
             {codeError && (
-              <div className="p-3.5 bg-red-950/60 border border-red-800 rounded-xl text-red-300 text-xs">
+              <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs">
                 {codeError}
               </div>
             )}
 
             {codeData && !codeLoading && (
               <div className="space-y-2.5">
-                <div className="flex items-center justify-between text-xs text-[#9e9e9e]">
-                  <span className="font-code text-white font-bold">{codeData.line_count} lines</span>
+                <div className="flex items-center justify-between text-xs text-[#77756f]">
+                  <span className="font-code text-[#171817] font-bold">{codeData.line_count} lines</span>
                   <button
                     type="button"
                     onClick={() => copyToClipboard(codeData.content, "code")}
                     className="btn-white px-3 py-1 text-xs cursor-pointer flex items-center gap-1.5"
                   >
-                    {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedCode ? <Check className="w-3.5 h-3.5 text-[#df7d4c]" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedCode ? "Copied" : "Copy"}</span>
                   </button>
                 </div>
 
-                <div className="bg-[#0e0e0e] rounded-xl border border-white/15 p-4 overflow-x-auto max-h-[480px] text-[11px] leading-relaxed text-white">
+                <div className="bg-[#f4efe6] rounded-xl border border-[rgba(23,24,23,0.12)] p-4 overflow-x-auto max-h-[480px] text-[11px] leading-relaxed text-[#171817]">
                   <pre className="font-code">{codeData.content}</pre>
                 </div>
               </div>

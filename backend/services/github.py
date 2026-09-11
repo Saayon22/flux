@@ -26,13 +26,13 @@ def parse_github_url(raw_url: str) -> Tuple[str, str]:
 
 # Fetches repository metadata from GitHub REST API with fallback for rate limits.
 async def fetch_repo_metadata(owner: str, repo: str) -> Dict[str, Any]:
-    api_url = f"https://api.github.com/repos/{owner}/{repo}"
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "flux-App"}
+    api_url = f"{settings.github_api_url}/repos/{owner}/{repo}"
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": settings.user_agent}
     if settings.github_token:
         headers["Authorization"] = f"Bearer {settings.github_token}"
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=settings.http_timeout) as client:
             resp = await client.get(api_url, headers=headers)
             if resp.status_code == 200:
                 data = resp.json()

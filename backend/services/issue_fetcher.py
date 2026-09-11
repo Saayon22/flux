@@ -57,16 +57,16 @@ async def fetch_repository_issues(
             all_records = get_issues_by_repo_id(repo_id, state=state)
             return [record_to_issue_summary(r) for r in cached], extract_available_labels(all_records)
 
-    headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "flux-app/1.0"}
+    headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": settings.user_agent}
     if settings.github_token:
         headers["Authorization"] = f"Bearer {settings.github_token.strip()}"
 
-    url = f"https://api.github.com/repos/{owner}/{repo}/issues"
+    url = f"{settings.github_api_url}/repos/{owner}/{repo}/issues"
     params = {"state": "open", "per_page": 50, "sort": "updated"}
 
     raw_items: List[Dict[str, Any]] = []
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=max(settings.http_timeout, 15.0)) as client:
             resp = await client.get(url, headers=headers, params=params)
             if resp.status_code == 200:
                 raw_items = resp.json()

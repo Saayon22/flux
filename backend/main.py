@@ -1,10 +1,6 @@
 # Main FastAPI entry point for flux application lifecycle, CORS, and routing.
 
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
-
-# Loads environment variables from .env
-load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,3 +46,13 @@ app.include_router(agent_router)
 @app.get("/api/health", tags=["system"])
 async def health_check():
     return {"status": "healthy", "app": "flux"}
+
+
+# Starts the development server using configured host and port settings.
+def main():
+    import uvicorn
+    uvicorn.run("main:app", host=settings.backend_host, port=settings.backend_port, reload=True)
+
+
+if __name__ == "__main__":
+    main()

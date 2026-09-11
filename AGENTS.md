@@ -1,6 +1,5 @@
 # AGENTS.md
 
-Dont touch frontend folder and its files.
 
 ## Commenting Rules
 - Strictly use single-line comments (`#` or `//`); no multi-line docstrings, block comments, or ASCII art banners.

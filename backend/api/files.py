@@ -10,8 +10,8 @@ from models.database import get_repository_by_id
 
 router = APIRouter(prefix="/api/repos", tags=["files"])
 
-MAX_PREVIEW_LINES = 600
-MAX_PREVIEW_BYTES = 64 * 1024
+MAX_PREVIEW_LINES = settings.max_preview_lines
+MAX_PREVIEW_BYTES = settings.max_preview_bytes
 
 
 # Response schema for file inspection preview.

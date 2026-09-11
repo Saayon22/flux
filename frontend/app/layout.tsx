@@ -1,3 +1,4 @@
+// Root layout providing global metadata, styling, and tab favicon for FLUX.
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -6,10 +7,18 @@ export const metadata: Metadata = {
   description:
     "Explore complex repository architectures, trace AST dependency networks, and solve issues autonomously with grounded AI agent synthesis.",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
 };
 
+// Renders the main document shell and child layout components.
 export default function RootLayout({
   children,
 }: Readonly<{

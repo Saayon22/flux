@@ -133,9 +133,9 @@ cp .env.example .env
 Configure your environment variables:
 
 ```ini
-GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.5-flash
-GITHUB_TOKEN=your_github_personal_access_token
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-3.5-flash-lite
+GITHUB_TOKEN=your_github_personal_access_token_here
 ```
 
 ### 2. Backend Setup

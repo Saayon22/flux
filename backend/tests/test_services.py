@@ -284,7 +284,7 @@ def test_understanding_model_and_storage():
         feature_map_json=json.dumps(features),
         flows_json=json.dumps(flows),
         digest_text="Digest text sample",
-        model_used="gemini-2.5-flash",
+        model_used="gemini-3.5-flash-lite",
         is_fallback=False,
         now_iso=now_iso,
     )

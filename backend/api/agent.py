@@ -64,8 +64,8 @@ async def get_agent_status():
     if github_token:
         try:
             import requests
-            headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json", "User-Agent": "flux-Agent"}
-            rl_resp = requests.get("https://api.github.com/rate_limit", headers=headers, timeout=5)
+            headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json", "User-Agent": settings.user_agent}
+            rl_resp = requests.get(f"{settings.github_api_url}/rate_limit", headers=headers, timeout=max(settings.http_timeout / 2, 5.0))
             if rl_resp.status_code == 200:
                 core = rl_resp.json().get("resources", {}).get("core", {})
                 github_info["authenticated"] = True
@@ -73,7 +73,7 @@ async def get_agent_status():
                 github_info["remaining"] = core.get("remaining", 5000)
                 github_info["reset"] = core.get("reset")
 
-            u_resp = requests.get("https://api.github.com/user", headers=headers, timeout=5)
+            u_resp = requests.get(f"{settings.github_api_url}/user", headers=headers, timeout=max(settings.http_timeout / 2, 5.0))
             if u_resp.status_code == 200:
                 github_info["user"] = u_resp.json().get("login")
         except Exception:

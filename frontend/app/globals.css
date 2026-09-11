@@ -184,11 +184,11 @@
   width: 166px;
   height: 42px;
   border-radius: 999px;
-  background: rgba(255, 254, 250, 0.42);
+  background: #ccbba5;
   filter: blur(1.3px);
-  opacity: 0.68;
+  opacity: 0.46;
   --cloud-scale: 1;
-  box-shadow: 0 10px 18px rgba(194, 170, 143, 0.08);
+  box-shadow: 0 10px 22px rgba(150, 126, 100, 0.14);
   will-change: transform;
 }
 
@@ -226,7 +226,7 @@
 .flux-cloud-two {
   top: 37%;
   left: 62%;
-  opacity: 0.47;
+  opacity: 0.42;
   --cloud-scale: 0.62;
   transform: scale(var(--cloud-scale));
   animation: flux-cloud-drift-two 56s -30s linear infinite;
@@ -235,7 +235,7 @@
 .flux-cloud-three {
   top: 61%;
   left: 28%;
-  opacity: 0.4;
+  opacity: 0.38;
   --cloud-scale: 1.04;
   transform: scale(var(--cloud-scale));
   animation: flux-cloud-drift-one 64s -45s linear infinite;
@@ -244,7 +244,7 @@
 .flux-cloud-four {
   top: 76%;
   left: 79%;
-  opacity: 0.34;
+  opacity: 0.32;
   --cloud-scale: 0.74;
   transform: scale(var(--cloud-scale));
   animation: flux-cloud-drift-two 72s -10s linear infinite;
@@ -253,7 +253,7 @@
 .flux-cloud-five {
   top: 48%;
   left: 4%;
-  opacity: 0.32;
+  opacity: 0.30;
   --cloud-scale: 0.5;
   transform: scale(var(--cloud-scale));
   animation: flux-cloud-drift-one 58s -38s linear infinite;
@@ -262,7 +262,7 @@
 .flux-cloud-six {
   top: 29%;
   left: 36%;
-  opacity: 0.38;
+  opacity: 0.36;
   --cloud-scale: 0.7;
   transform: scale(var(--cloud-scale));
   animation: flux-cloud-drift-two 62s -24s linear infinite;
@@ -271,7 +271,7 @@
 .flux-cloud-seven {
   top: 69%;
   left: 56%;
-  opacity: 0.3;
+  opacity: 0.28;
   --cloud-scale: 0.88;
   transform: scale(var(--cloud-scale));
   animation: flux-cloud-drift-one 70s -52s linear infinite;
@@ -381,47 +381,47 @@
   color: #fffdf8 !important;
 }
 
-/* The graph is a focused instrument inside the light workspace. Keep its dark
-   control rail legible while the canvas stays bright enough to inspect. */
+/* Graph container shell and harmonious gallery toolbar. */
 .graph-shell {
-  border-color: rgba(23, 24, 23, 0.22) !important;
+  border-color: rgba(23, 24, 23, 0.14) !important;
   background: #fffefa !important;
 }
 
 .graph-toolbar {
-  background: #171817 !important;
-  color: #fffefa !important;
-  border-color: rgba(255, 254, 250, 0.12) !important;
+  background: rgba(255, 254, 250, 0.96) !important;
+  color: var(--ink) !important;
+  border-color: rgba(23, 24, 23, 0.1) !important;
   min-height: 76px;
+  backdrop-filter: blur(12px);
 }
 
 .graph-toolbar .text-white,
 .graph-toolbar [class*="text-white"] {
-  color: #fffefa !important;
+  color: var(--ink) !important;
 }
 
 .graph-toolbar .text-white\/20 {
-  color: rgba(255, 254, 250, 0.3) !important;
+  color: rgba(23, 24, 23, 0.2) !important;
 }
 
 .graph-toolbar input {
-  color: #fffefa !important;
+  color: var(--ink) !important;
   caret-color: var(--color-primary);
 }
 
 .graph-toolbar input::placeholder {
-  color: rgba(255, 254, 250, 0.5) !important;
+  color: rgba(23, 24, 23, 0.45) !important;
 }
 
 .graph-toolbar select {
   background: #fffefa !important;
-  color: #171817 !important;
-  border-color: rgba(255, 254, 250, 0.24) !important;
+  color: var(--ink) !important;
+  border-color: rgba(23, 24, 23, 0.14) !important;
 }
 
 .graph-toolbar select option {
   background: #fffefa;
-  color: #171817;
+  color: var(--ink);
 }
 
 .graph-toolbar button {
@@ -438,11 +438,49 @@
 
 .graph-toolbar [class*="bg-white"] {
   background: #fffefa !important;
-  color: #171817 !important;
+  color: var(--ink) !important;
+  border: 1px solid rgba(23, 24, 23, 0.12) !important;
 }
 
 .graph-toolbar [class*="bg-white"] [class*="text-[#0e0e0e]"] {
-  color: #171817 !important;
+  color: var(--ink) !important;
+}
+
+.node-inspector-drawer {
+  background: rgba(255, 254, 250, 0.98) !important;
+  color: var(--ink) !important;
+  border-color: rgba(23, 24, 23, 0.14) !important;
+}
+
+.node-inspector-drawer [class*="text-white"] {
+  color: var(--ink) !important;
+}
+
+.node-inspector-drawer [class*="bg-[#0e0e0e]"],
+.node-inspector-drawer [class*="bg-[#141414]"],
+.node-inspector-drawer [class*="bg-[#171717]"] {
+  background-color: rgba(247, 244, 236, 0.75) !important;
+}
+
+.node-inspector-drawer [class*="bg-[#1a1a1a]"] {
+  background-color: #fffefa !important;
+}
+
+.agent-handoff-modal {
+  background: #fffefa !important;
+  color: var(--ink) !important;
+  border-color: rgba(23, 24, 23, 0.14) !important;
+}
+
+.agent-handoff-modal [class*="text-white"] {
+  color: var(--ink) !important;
+}
+
+.agent-handoff-modal [class*="bg-[#0e0e0e]"],
+.agent-handoff-modal [class*="bg-[#121212]"],
+.agent-handoff-modal [class*="bg-[#141414]"],
+.agent-handoff-modal [class*="bg-[#171717]"] {
+  background-color: rgba(247, 244, 236, 0.7) !important;
 }
 
 .graph-viewport {

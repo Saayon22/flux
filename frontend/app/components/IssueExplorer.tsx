@@ -1,13 +1,5 @@
 "use client";
-
-/**
- * IssueExplorer.tsx
- * GitHub Issue Discovery & Grounded Explanation component.
- * Fetches open issues, filters by label/search, translates technical bugs into
- * plain-English explanations with real-world analogies and implementation steps,
- * and links directly to relevant files in the Graph Explorer.
- */
-
+// GitHub issue discovery and grounded architecture resolution component.
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -36,9 +28,11 @@ interface IssueExplorerProps {
   onPrepareAgentHandoff?: (issue: IssueSummary, explanation: IssueExplanation) => void;
 }
 
+// Extracts error message string safely from unknown error.
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+// Renders split-view issue browser with grounded Gemini blueprints.
 export default function IssueExplorer({
   owner,
   repo,
@@ -152,16 +146,16 @@ export default function IssueExplorer({
   return (
     <div className="issue-explorer akaru-card p-6 sm:p-8 space-y-6 shadow-2xl">
       {/* Header & Controls Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[rgba(23,24,23,0.1)] pb-5">
         <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-2xl bg-[#e49366] text-[#0e0e0e] flex items-center justify-center font-bold shadow-md shadow-[#e49366]/20">
+          <div className="w-10 h-10 rounded-2xl bg-[#df7d4c] text-[#fffdf8] flex items-center justify-center font-bold shadow-md shadow-[#df7d4c]/20">
             <CircleDot className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-extrabold text-white tracking-tight">
+            <h3 className="text-base font-extrabold text-[#171817] tracking-tight">
               Issue Discovery &amp; Grounded Resolution
             </h3>
-            <p className="text-xs text-[#9e9e9e] mt-0.5">
+            <p className="text-xs text-[#77756f] mt-0.5">
               Inspect grounded problem breakdowns and launch verified autonomous agent fixes.
             </p>
           </div>
@@ -169,18 +163,18 @@ export default function IssueExplorer({
 
         <div className="flex items-center gap-3">
           {/* Issue Filter Input */}
-          <div className="flex items-center gap-2 px-3.5 py-2 bg-[#0e0e0e] border border-white/15 rounded-xl focus-within:border-[#e49366] transition-all">
-            <Search className="w-4 h-4 text-[#e49366]" />
+          <div className="flex items-center gap-2 px-3.5 py-2 bg-[#f4efe6] border border-[rgba(23,24,23,0.14)] rounded-xl focus-within:border-[#df7d4c] transition-all">
+            <Search className="w-4 h-4 text-[#df7d4c]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search issues..."
-              className="bg-transparent text-xs text-white placeholder-white/40 focus:outline-none w-44 font-code"
+              className="bg-transparent text-xs text-[#171817] placeholder-[rgba(23,24,23,0.45)] focus:outline-none w-44 font-code"
             />
           </div>
 
-          {/* Sync (Bright White Button) */}
+          {/* Sync Button */}
           <button
             type="button"
             onClick={() => loadIssues(true)}
@@ -199,10 +193,10 @@ export default function IssueExplorer({
           <button
             type="button"
             onClick={() => setSelectedLabel("all")}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border shadow-xs ${
               selectedLabel === "all"
-                ? "bg-[#e49366] text-[#0e0e0e] border-[#e49366]"
-                : "bg-transparent text-white border-white/20 hover:border-white"
+                ? "bg-[#df7d4c] text-[#fffdf8] border-[#df7d4c]"
+                : "bg-[#fffefa] text-[#171817] border-[rgba(23,24,23,0.14)] hover:border-[#df7d4c]"
             }`}
           >
             All Labels ({issues.length})
@@ -212,10 +206,10 @@ export default function IssueExplorer({
               key={lbl.name}
               type="button"
               onClick={() => setSelectedLabel(lbl.name)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border shadow-xs ${
                 selectedLabel === lbl.name
-                  ? "bg-[#e49366] text-[#0e0e0e] border-[#e49366]"
-                  : "bg-transparent text-white border-white/20 hover:border-white"
+                  ? "bg-[#df7d4c] text-[#fffdf8] border-[#df7d4c]"
+                  : "bg-[#fffefa] text-[#171817] border-[rgba(23,24,23,0.14)] hover:border-[#df7d4c]"
               }`}
             >
               <span>{lbl.name}</span>
@@ -226,7 +220,7 @@ export default function IssueExplorer({
 
       {/* Error Alert */}
       {issuesError && (
-        <div className="p-4 bg-red-950/60 border border-red-800 rounded-2xl text-xs font-code text-red-300">
+        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs font-code text-red-700">
           {issuesError}
         </div>
       )}
@@ -236,12 +230,12 @@ export default function IssueExplorer({
         {/* Left Column: Issue List */}
         <div className="lg:col-span-5 space-y-3 max-h-[580px] overflow-y-auto pr-1">
           {loadingIssues && issues.length === 0 ? (
-            <div className="p-12 text-center text-xs text-[#9e9e9e] akaru-card-sm">
-              <div className="w-5 h-5 border-2 border-[#e49366] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            <div className="p-12 text-center text-xs text-[#77756f] akaru-card-sm">
+              <div className="w-5 h-5 border-2 border-[#df7d4c] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
               Fetching repository issues from GitHub...
             </div>
           ) : filteredIssues.length === 0 ? (
-            <div className="p-10 text-center akaru-card-sm text-xs text-[#9e9e9e] space-y-3">
+            <div className="p-10 text-center akaru-card-sm text-xs text-[#77756f] space-y-3">
               <p>No open issues found matching your query.</p>
               <button
                 type="button"
@@ -261,17 +255,17 @@ export default function IssueExplorer({
                   onClick={() => setSelectedIssue(issue)}
                   className={`issue-list-card p-4 rounded-2xl border transition-all cursor-pointer text-xs space-y-2 ${
                     isSelected
-                      ? "issue-list-card-selected bg-[#1f1f1f] border-[#e49366] shadow-lg"
-                      : "bg-[#151515] border-white/10 text-white hover:bg-[#1c1c1c] hover:border-white/30"
+                      ? "issue-list-card-selected bg-[#fffdf8] border-[#df7d4c] shadow-md shadow-[#df7d4c]/10"
+                      : "bg-[#fffefa] border-[rgba(23,24,23,0.12)] text-[#171817] hover:bg-[#fffdf8] hover:border-[#df7d4c] shadow-xs"
                   }`}
                 >
                   <div className="flex items-center justify-between font-code text-[11px]">
-                    <span className="text-[#e49366] font-bold">#{issue.number}</span>
-                    <span className="text-[#9e9e9e] font-sans text-[11px]">
+                    <span className="text-[#df7d4c] font-bold">#{issue.number}</span>
+                    <span className="text-[#77756f] font-sans text-[11px]">
                       {issue.comments_count || 0} comments
                     </span>
                   </div>
-                  <h4 className="font-bold text-white text-sm line-clamp-2 leading-snug">
+                  <h4 className="font-bold text-[#171817] text-sm line-clamp-2 leading-snug">
                     {issue.title}
                   </h4>
                   {issue.labels && issue.labels.length > 0 && (
@@ -279,7 +273,7 @@ export default function IssueExplorer({
                       {issue.labels.slice(0, 3).map((lbl, lIdx) => (
                         <span
                           key={lIdx}
-                          className="px-2 py-0.5 bg-[#0e0e0e] text-white text-[10px] font-code rounded-md border border-white/10 font-medium"
+                          className="px-2 py-0.5 bg-[rgba(23,24,23,0.05)] text-[#171817] text-[10px] font-code rounded-md border border-[rgba(23,24,23,0.1)] font-medium"
                         >
                           {lbl.name}
                         </span>
@@ -293,26 +287,26 @@ export default function IssueExplorer({
         </div>
 
         {/* Right Column: Grounded AI Explanation */}
-        <div className="issue-detail lg:col-span-7 bg-[#141414] border border-white/10 rounded-2xl p-6 space-y-5 max-h-[580px] overflow-y-auto">
+        <div className="issue-detail lg:col-span-7 bg-[#fffefa] border border-[rgba(23,24,23,0.12)] rounded-2xl p-6 space-y-5 max-h-[580px] overflow-y-auto text-[#171817] shadow-sm">
           {!selectedIssue ? (
-            <div className="p-16 text-center text-xs text-[#9e9e9e]">
+            <div className="p-16 text-center text-xs text-[#77756f]">
               Select an issue from the list to inspect grounded explanations and fix blueprints.
             </div>
           ) : (
             <div className="space-y-5">
               {/* Header */}
-              <div className="border-b border-white/10 pb-4 space-y-3">
+              <div className="border-b border-[rgba(23,24,23,0.1)] pb-4 space-y-3">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 bg-[#e49366] text-[#0e0e0e] font-code text-[11px] font-extrabold rounded-md">
+                      <span className="px-2.5 py-0.5 bg-[#df7d4c] text-[#fffdf8] font-code text-[11px] font-extrabold rounded-md">
                         #{selectedIssue.number}
                       </span>
-                      <span className="text-xs text-[#9e9e9e]">
-                        opened by <strong className="text-white">{selectedIssue.author || "user"}</strong>
+                      <span className="text-xs text-[#77756f]">
+                        opened by <strong className="text-[#171817]">{selectedIssue.author || "user"}</strong>
                       </span>
                     </div>
-                    <h3 className="text-lg font-extrabold text-white leading-tight">
+                    <h3 className="text-lg font-extrabold text-[#171817] leading-tight">
                       {selectedIssue.title}
                     </h3>
                   </div>
@@ -322,7 +316,7 @@ export default function IssueExplorer({
                       href={selectedIssue.html_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="p-2.5 bg-white text-[#0e0e0e] rounded-xl font-bold hover:bg-slate-100 transition-all cursor-pointer shadow-sm"
+                      className="p-2.5 bg-[#fffefa] text-[#171817] border border-[rgba(23,24,23,0.14)] rounded-xl font-bold hover:bg-[rgba(23,24,23,0.05)] transition-all cursor-pointer shadow-xs"
                       title="View on GitHub"
                     >
                       <ExternalLink className="w-4 h-4" />
@@ -344,13 +338,13 @@ export default function IssueExplorer({
                 <button
                   type="button"
                   onClick={() => setShowOriginalBody(!showOriginalBody)}
-                  className="text-xs text-[#e49366] hover:underline cursor-pointer inline-block font-semibold"
+                  className="text-xs text-[#df7d4c] hover:underline cursor-pointer inline-block font-semibold"
                 >
                   {showOriginalBody ? "Hide Original Description" : "View Original GitHub Description"}
                 </button>
 
                 {showOriginalBody && (
-                  <div className="p-4 bg-[#0e0e0e] rounded-2xl border border-white/10 text-xs font-code text-white whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
+                  <div className="p-4 bg-[#f4efe6] rounded-2xl border border-[rgba(23,24,23,0.12)] text-xs font-code text-[#171817] whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
                     {selectedIssue.body || "No description provided."}
                   </div>
                 )}
@@ -358,14 +352,14 @@ export default function IssueExplorer({
 
               {/* Grounded Breakdown */}
               {explaining && (
-                <div className="p-12 text-center text-xs text-white space-y-3">
-                  <div className="w-6 h-6 border-2 border-[#e49366] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <div className="p-12 text-center text-xs text-[#171817] space-y-3">
+                  <div className="w-6 h-6 border-2 border-[#df7d4c] border-t-transparent rounded-full animate-spin mx-auto"></div>
                   <p>Synthesizing grounded explanation via Gemini...</p>
                 </div>
               )}
 
               {explanationError && (
-                <div className="p-4 bg-red-950/60 border border-red-800 rounded-2xl text-xs font-code text-red-300">
+                <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs font-code text-red-700">
                   {explanationError}
                 </div>
               )}
@@ -373,12 +367,12 @@ export default function IssueExplorer({
               {explanation && !explaining && (
                 <div className="space-y-5 text-xs">
                   {/* Summary */}
-                  <div className="space-y-2 bg-[#0e0e0e] p-5 rounded-2xl border border-white/10">
-                    <div className="text-xs font-bold text-[#e49366] uppercase tracking-wider flex items-center gap-2">
-                      <CloudCog className="w-4 h-4 text-[#e49366]" strokeWidth={2.25} />
+                  <div className="space-y-2 bg-[rgba(223,125,76,0.06)] p-5 rounded-2xl border border-[rgba(223,125,76,0.22)]">
+                    <div className="text-xs font-bold text-[#df7d4c] uppercase tracking-wider flex items-center gap-2">
+                      <CloudCog className="w-4 h-4 text-[#df7d4c]" strokeWidth={2.25} />
                       Executive Summary
                     </div>
-                    <p className="text-white leading-relaxed text-xs">
+                    <p className="text-[#171817] leading-relaxed text-xs">
                       {explanation.plain_english_summary}
                     </p>
                   </div>
@@ -386,8 +380,8 @@ export default function IssueExplorer({
                   {/* Impacted Files */}
                   {explanation.relevant_files && explanation.relevant_files.length > 0 && (
                     <div className="space-y-2.5">
-                      <div className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                        <FileCode className="w-4 h-4 text-[#e49366]" />
+                      <div className="text-xs font-bold text-[#171817] uppercase tracking-wider flex items-center gap-2">
+                        <FileCode className="w-4 h-4 text-[#df7d4c]" />
                         Impacted Source Files
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -396,10 +390,10 @@ export default function IssueExplorer({
                             key={fIdx}
                             type="button"
                             onClick={() => onSelectFile(item.file)}
-                            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#1a1a1a] hover:bg-[#242424] text-white hover:text-[#e49366] rounded-xl border border-white/10 hover:border-[#e49366] text-xs font-code transition-all cursor-pointer shadow-sm"
+                            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#fffefa] hover:bg-[rgba(223,125,76,0.06)] text-[#171817] hover:text-[#df7d4c] rounded-xl border border-[rgba(23,24,23,0.12)] hover:border-[#df7d4c] text-xs font-code transition-all cursor-pointer shadow-xs"
                           >
                             <span>{item.file}</span>
-                            <ArrowRight className="w-3.5 h-3.5 text-[#e49366]" />
+                            <ArrowRight className="w-3.5 h-3.5 text-[#df7d4c]" />
                           </button>
                         ))}
                       </div>
@@ -409,19 +403,19 @@ export default function IssueExplorer({
                   {/* Implementation Steps */}
                   {explanation.implementation_steps && explanation.implementation_steps.length > 0 && (
                     <div className="space-y-2.5">
-                      <div className="text-xs font-bold text-white uppercase tracking-wider">
+                      <div className="text-xs font-bold text-[#171817] uppercase tracking-wider">
                         Resolution Steps Blueprint
                       </div>
                       <div className="space-y-2">
                         {explanation.implementation_steps.map((stepText, sIdx) => (
                           <div
                             key={sIdx}
-                            className="p-3.5 bg-[#0e0e0e] rounded-xl border border-white/10 text-white text-xs flex items-start gap-3"
+                            className="p-3.5 bg-[rgba(23,24,23,0.03)] rounded-xl border border-[rgba(23,24,23,0.08)] text-[#171817] text-xs flex items-start gap-3"
                           >
-                            <span className="text-[#e49366] font-code font-extrabold text-xs shrink-0 mt-0.5">
+                            <span className="text-[#df7d4c] font-code font-extrabold text-xs shrink-0 mt-0.5">
                               0{sIdx + 1}.
                             </span>
-                            <span className="leading-relaxed">{stepText}</span>
+                            <span className="leading-relaxed text-[#171817]">{stepText}</span>
                           </div>
                         ))}
                       </div>

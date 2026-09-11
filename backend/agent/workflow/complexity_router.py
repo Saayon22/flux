@@ -76,7 +76,7 @@ def generate_plan_artifact(
 
     num_files = len(files_touched)
     is_pre_routed = bool(diff_stats.get("pre_routed"))
-    estimated_risk = "High" if is_pre_routed or line_count > 300 or num_files > 4 else "Moderate"
+    estimated_risk = "High" if is_pre_routed or line_count > (MAX_DIFF_LINES_FOR_PR * 2) or num_files > MAX_FILES_TOUCHED_FOR_PR else "Moderate"
 
     steps = [
         "1. Architecture Isolation: Decouple business logic and state mutators from external boundaries.",

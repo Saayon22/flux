@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 import requests
 
 from google.adk.tools import FunctionTool, LongRunningFunctionTool, ToolContext
+from config import settings
 from ..config import DEMO_MODE, GITHUB_TOKEN
 from ..tracing import logger
 
@@ -21,10 +22,10 @@ def fetch_issue(repo_name: str, issue_id: str, tool_context: Optional[ToolContex
         headers["Authorization"] = f"Bearer {token}"
 
     clean_repo = repo_name.replace("https://github.com/", "").strip("/")
-    url = f"https://api.github.com/repos/{clean_repo}/issues/{issue_id}"
+    url = f"{settings.github_api_url}/repos/{clean_repo}/issues/{issue_id}"
 
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
+        resp = requests.get(url, headers=headers, timeout=settings.http_timeout)
         if resp.status_code == 200:
             data = resp.json()
             issue_data = {
@@ -67,9 +68,9 @@ def fork_repo(repo_url: str, tool_context: Optional[ToolContext] = None) -> Opti
 
     if token and not DEMO_MODE:
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"}
-        api_url = f"https://api.github.com/repos/{clean_repo}/forks"
+        api_url = f"{settings.github_api_url}/repos/{clean_repo}/forks"
         try:
-            resp = requests.post(api_url, headers=headers, timeout=10)
+            resp = requests.post(api_url, headers=headers, timeout=settings.http_timeout)
             if resp.status_code in (202, 201):
                 data = resp.json()
                 fork_ref = data.get("full_name", fork_ref)
@@ -77,7 +78,7 @@ def fork_repo(repo_url: str, tool_context: Optional[ToolContext] = None) -> Opti
                 for _ in range(5):
                     time.sleep(1.0)
                     try:
-                        if requests.get(f"https://api.github.com/repos/{fork_ref}", headers=headers, timeout=5).status_code == 200:
+                        if requests.get(f"{settings.github_api_url}/repos/{fork_ref}", headers=headers, timeout=max(settings.http_timeout / 2, 5.0)).status_code == 200:
                             break
                     except Exception:
                         pass
@@ -120,10 +121,10 @@ def publish_pr(
     pr_number = 1
 
     if token and not DEMO_MODE and upstream_repo:
-        headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json", "User-Agent": "flux-Agent"}
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json", "User-Agent": settings.user_agent}
         base_branch = "main"
         try:
-            up_resp = requests.get(f"https://api.github.com/repos/{upstream_repo}", headers=headers, timeout=10)
+            up_resp = requests.get(f"{settings.github_api_url}/repos/{upstream_repo}", headers=headers, timeout=settings.http_timeout)
             if up_resp.status_code == 200:
                 base_branch = up_resp.json().get("default_branch", "main")
         except Exception:
@@ -137,7 +138,7 @@ def publish_pr(
                 if diff and diff.strip():
                     subprocess.run(["git", "apply", "--whitespace=fix", "-"], input=diff, cwd=rpath, capture_output=True, text=True, check=False)
                 subprocess.run(["git", "add", "-A"], cwd=rpath, capture_output=True, text=True, check=False)
-                subprocess.run(["git", "-c", "user.name=flux-bot", "-c", "user.email=bot@flux.dev", "commit", "-m", pr_title, "--allow-empty"], cwd=rpath, capture_output=True, text=True, check=False)
+                subprocess.run(["git", "-c", f"user.name={settings.git_committer_name}", "-c", f"user.email={settings.git_committer_email}", "commit", "-m", pr_title, "--allow-empty"], cwd=rpath, capture_output=True, text=True, check=False)
                 fork_push_url = f"https://x-access-token:{token}@github.com/{fork_ref}.git"
                 subprocess.run(["git", "push", "-u", fork_push_url, f"{pr_branch}:{pr_branch}", "--force"], cwd=rpath, capture_output=True, text=True, timeout=30, check=False)
             except Exception as e:
@@ -148,13 +149,13 @@ def publish_pr(
         head_ref = f"{fork_owner}:{pr_branch}"
         payload = {"title": pr_title, "body": pr_body, "head": head_ref, "base": base_branch}
         try:
-            resp = requests.post(f"https://api.github.com/repos/{upstream_repo}/pulls", headers=headers, json=payload, timeout=15)
+            resp = requests.post(f"{settings.github_api_url}/repos/{upstream_repo}/pulls", headers=headers, json=payload, timeout=max(settings.http_timeout * 1.5, 15.0))
             if resp.status_code == 201:
                 data = resp.json()
                 pr_url = data.get("html_url", pr_url)
                 pr_number = data.get("number", pr_number)
             elif resp.status_code == 422:
-                chk = requests.get(f"https://api.github.com/repos/{upstream_repo}/pulls", headers=headers, params={"head": head_ref, "state": "all"}, timeout=10)
+                chk = requests.get(f"{settings.github_api_url}/repos/{upstream_repo}/pulls", headers=headers, params={"head": head_ref, "state": "all"}, timeout=settings.http_timeout)
                 if chk.status_code == 200 and chk.json():
                     pr_url = chk.json()[0].get("html_url", pr_url)
                     pr_number = chk.json()[0].get("number", pr_number)
