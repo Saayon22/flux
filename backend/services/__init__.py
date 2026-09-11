@@ -1,3 +1,1 @@
-"""
-Services package for GitHub communication, repository cloning, and documentation ingestion.
-"""
+# Package initialization for services.

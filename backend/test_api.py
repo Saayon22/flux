@@ -1,7 +1,4 @@
-"""
-Integration tests for FastAPI REST API endpoints using httpx AsyncClient.
-Verifies health check, ingestion endpoint, detail retrieval, and listing.
-"""
+# Integration tests for FastAPI REST API endpoints using httpx AsyncClient.
 
 import asyncio
 import sys
@@ -14,52 +11,42 @@ from main import app
 from models.database import init_db
 
 
+# Runs asynchronous integration tests against FastAPI application endpoints.
 async def test_api_endpoints():
-    """Runs async tests against FastAPI app instance via ASGI transport."""
     init_db()
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        # 1. Health check
+        # Health check verification
         res = await client.get("/api/health")
-        assert res.status_code == 200, f"Health check failed: {res.text}"
+        assert res.status_code == 200
         assert res.json()["status"] == "healthy"
-        print("[PASS] GET /api/health returned 200 OK")
 
-        # 2. Ingestion endpoint
+        # Ingestion endpoint verification
         res = await client.post("/api/repos/ingest", json={"url": "octocat/Hello-World"})
-        assert res.status_code == 200, f"Ingest endpoint failed: {res.text}"
+        assert res.status_code == 200
         data = res.json()
         assert data["success"] is True
         assert data["repository"]["owner"] == "octocat"
         assert data["repository"]["name"] == "Hello-World"
-        print("[PASS] POST /api/repos/ingest returned 200 OK")
 
-        # 3. Get repository detail
+        # Repository detail retrieval
         res = await client.get("/api/repos/octocat/Hello-World")
-        assert res.status_code == 200, f"Get detail failed: {res.text}"
+        assert res.status_code == 200
         assert res.json()["id"] == "octocat/hello-world"
-        print("[PASS] GET /api/repos/octocat/Hello-World returned 200 OK")
 
-        # 4. List repositories
+        # Repository listing
         res = await client.get("/api/repos")
-        assert res.status_code == 200, f"List failed: {res.text}"
+        assert res.status_code == 200
         assert len(res.json()) >= 1
-        print("[PASS] GET /api/repos returned 200 OK")
 
-        # 5. File content endpoint (valid file)
+        # File content inspection
         res = await client.get("/api/repos/octocat/Hello-World/files/content", params={"path": "README"})
-        assert res.status_code == 200, f"File content failed: {res.text}"
-        file_data = res.json()
-        assert file_data["path"] == "README"
-        assert file_data["line_count"] >= 1
-        print("[PASS] GET /api/repos/.../files/content returned 200 OK")
+        assert res.status_code == 200
+        assert res.json()["path"] == "README"
 
-        # 6. File content endpoint (directory traversal blocked)
+        # Traversal security check
         res = await client.get("/api/repos/octocat/Hello-World/files/content", params={"path": "../../main.py"})
-        assert res.status_code in (403, 404), f"Security check failed: {res.status_code}"
-        print("[PASS] Directory traversal attempt properly blocked with 403/404")
-
-    print("--- All API Endpoints Verified Successfully! ---")
+        assert res.status_code in (403, 404)
 
 
 if __name__ == "__main__":

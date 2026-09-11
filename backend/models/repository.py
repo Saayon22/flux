@@ -1,27 +1,17 @@
-"""
-Pydantic data schemas for repository requests, responses, and serialization.
-"""
+# Pydantic data schemas for repository requests, responses, and serialization.
 
 from typing import Optional
 from pydantic import BaseModel, Field
 
 
+# Request payload schema for ingesting a repository.
 class RepoIngestRequest(BaseModel):
-    """
-    Request body for ingesting a GitHub repository.
-    Accepts full URL (https://github.com/owner/repo) or shorthand (owner/repo).
-    """
     url: str = Field(..., description="GitHub repository URL or owner/repo shorthand")
-    force_refresh: bool = Field(
-        default=False,
-        description="If True, re-clones the repo even if already present locally"
-    )
+    force_refresh: bool = Field(default=False, description="If True, re-clones the repository")
 
 
+# Summary schema of repository metadata.
 class RepoSummary(BaseModel):
-    """
-    Basic repository metadata summary.
-    """
     id: str
     url: str
     owner: str
@@ -41,18 +31,14 @@ class RepoSummary(BaseModel):
     updated_at: str
 
 
+# Detailed repository schema including markdown documentation contents.
 class RepoDetailResponse(RepoSummary):
-    """
-    Detailed repository view including raw markdown documentation contents.
-    """
     readme_content: Optional[str] = None
     contributing_content: Optional[str] = None
 
 
+# Response payload schema for repository ingestion completion.
 class RepoIngestResponse(BaseModel):
-    """
-    Response returned immediately after repository ingestion process finishes.
-    """
     success: bool
     message: str
     repository: Optional[RepoDetailResponse] = None

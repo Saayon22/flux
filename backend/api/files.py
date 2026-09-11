@@ -1,7 +1,4 @@
-"""
-FastAPI Router for repository file content retrieval.
-Allows safe inspection and code preview of files stored in cloned workspaces.
-"""
+# FastAPI Router for safe repository file content inspection and code preview.
 
 from pathlib import Path
 from typing import Optional
@@ -13,11 +10,11 @@ from models.database import get_repository_by_id
 
 router = APIRouter(prefix="/api/repos", tags=["files"])
 
-# Maximum lines and bytes returned for fast code preview
 MAX_PREVIEW_LINES = 600
-MAX_PREVIEW_BYTES = 64 * 1024  # 64 KB
+MAX_PREVIEW_BYTES = 64 * 1024
 
 
+# Response schema for file inspection preview.
 class FileContentResponse(BaseModel):
     path: str
     language: str
@@ -27,87 +24,49 @@ class FileContentResponse(BaseModel):
     error: Optional[str] = None
 
 
-def _detect_language(file_path: Path) -> str:
-    """Infers syntax language from file extension."""
-    ext = file_path.suffix.lower()
+# Infers syntax highlighting language from file extension.
+def detect_language(file_path: Path) -> str:
     mapping = {
-        ".py": "python",
-        ".js": "javascript",
-        ".jsx": "javascript",
-        ".ts": "typescript",
-        ".tsx": "typescript",
-        ".json": "json",
-        ".md": "markdown",
-        ".html": "html",
-        ".css": "css",
-        ".sql": "sql",
-        ".sh": "bash",
-        ".yaml": "yaml",
-        ".yml": "yaml",
-        ".toml": "toml",
+        ".py": "python", ".js": "javascript", ".jsx": "javascript",
+        ".ts": "typescript", ".tsx": "typescript", ".json": "json",
+        ".md": "markdown", ".html": "html", ".css": "css",
+        ".sql": "sql", ".sh": "bash", ".yaml": "yaml", ".yml": "yaml", ".toml": "toml",
     }
-    return mapping.get(ext, "plaintext")
+    return mapping.get(file_path.suffix.lower(), "plaintext")
 
 
+# Safely reads and returns the text content of a workspace file with traversal checks.
 @router.get("/{owner}/{repo}/files/content", response_model=FileContentResponse)
 async def get_file_content_endpoint(
     owner: str,
     repo: str,
-    path: str = Query(..., description="Relative path of file inside repository workspace"),
+    path: str = Query(..., description="Relative path of file inside workspace"),
 ):
-    """
-    Safely retrieves the content of a specific file in the repository workspace.
-    Guards strictly against directory traversal vulnerabilities.
-    """
     repo_id = f"{owner.lower()}/{repo.lower()}"
     repo_record = get_repository_by_id(repo_id)
     if not repo_record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Repository '{owner}/{repo}' has not been ingested yet."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Repository '{owner}/{repo}' not ingested.")
 
-    # Base workspace directory for this repository
     repo_dir = (settings.workspaces_dir / repo_record["owner"] / repo_record["name"]).resolve()
     if not repo_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Local workspace directory for '{owner}/{repo}' not found on disk."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace directory not found.")
 
-    # Sanitize and resolve target path
-    # Normalize backslashes/slashes
     clean_rel = path.strip().replace("\\", "/").lstrip("/")
     target_file = (repo_dir / clean_rel).resolve()
 
-    # Security check: verify target path is inside repo_dir (prevents ../ traversal)
+    # Security verification to prevent directory traversal
     try:
         if not target_file.is_relative_to(repo_dir):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: file path is outside the repository workspace."
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: file outside workspace.")
     except AttributeError:
-        # Fallback for Python versions where is_relative_to might behave differently
         if not str(target_file).startswith(str(repo_dir)):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: file path is outside the repository workspace."
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: file outside workspace.")
 
     if not target_file.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"File '{clean_rel}' not found in repository."
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"File '{clean_rel}' not found.")
     if not target_file.is_file():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Path '{clean_rel}' is a directory, not a readable file."
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Path '{clean_rel}' is a directory.")
 
-    # Read content with line/byte caps
     try:
         with open(target_file, "r", encoding="utf-8", errors="replace") as f:
             lines = []
@@ -129,13 +88,10 @@ async def get_file_content_endpoint(
 
             return FileContentResponse(
                 path=clean_rel,
-                language=_detect_language(target_file),
+                language=detect_language(target_file),
                 line_count=total_lines,
                 content=content,
                 is_truncated=is_truncated,
             )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to read file '{clean_rel}': {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to read file: {e}")

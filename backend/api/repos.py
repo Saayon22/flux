@@ -1,6 +1,4 @@
-"""
-FastAPI Router for repository ingestion and retrieval endpoints.
-"""
+# FastAPI Router for repository ingestion and retrieval endpoints.
 
 from typing import List
 from fastapi import APIRouter, HTTPException, status
@@ -17,8 +15,8 @@ from services.repo_ingestor import ingest_repository
 router = APIRouter(prefix="/api/repos", tags=["repositories"])
 
 
-def _format_repo_detail(record: dict) -> RepoDetailResponse:
-    """Helper to convert database dict to RepoDetailResponse model."""
+# Formats database dictionary into RepoDetailResponse schema.
+def format_repo_detail(record: dict) -> RepoDetailResponse:
     return RepoDetailResponse(
         id=record["id"],
         url=record["url"],
@@ -42,8 +40,8 @@ def _format_repo_detail(record: dict) -> RepoDetailResponse:
     )
 
 
-def _format_repo_summary(record: dict) -> RepoSummary:
-    """Helper to convert database dict to RepoSummary model (excluding heavy doc bodies)."""
+# Formats database dictionary into lightweight RepoSummary schema.
+def format_repo_summary(record: dict) -> RepoSummary:
     return RepoSummary(
         id=record["id"],
         url=record["url"],
@@ -65,56 +63,31 @@ def _format_repo_summary(record: dict) -> RepoSummary:
     )
 
 
+# Ingests a repository, clones workspace, reads documentation, and saves record.
 @router.post("/ingest", response_model=RepoIngestResponse, status_code=status.HTTP_200_OK)
 async def ingest_repo_endpoint(request: RepoIngestRequest):
-    """
-    Ingests a repository given its GitHub URL or shorthand.
-    Performs shallow clone, reads README/CONTRIBUTING, saves to SQLite, and returns metadata.
-    """
     try:
         repo_data = await ingest_repository(request.url, force_refresh=request.force_refresh)
-        detail = _format_repo_detail(repo_data)
-        return RepoIngestResponse(
-            success=True,
-            message=f"Successfully ingested {detail.owner}/{detail.name}",
-            repository=detail,
-        )
+        detail = format_repo_detail(repo_data)
+        return RepoIngestResponse(success=True, message=f"Successfully ingested {detail.owner}/{detail.name}", repository=detail)
     except ValueError as ve:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(ve)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except RuntimeError as re:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(re)
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(re))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+# Retrieves stored repository details by owner and repository name.
 @router.get("/{owner}/{repo}", response_model=RepoDetailResponse)
 async def get_repo_endpoint(owner: str, repo: str):
-    """
-    Retrieves stored repository details, clone status, and documentation contents by owner and repo name.
-    """
-    repo_id = f"{owner.lower()}/{repo.lower()}"
-    record = get_repository_by_id(repo_id)
+    record = get_repository_by_id(f"{owner.lower()}/{repo.lower()}")
     if not record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Repository '{owner}/{repo}' has not been ingested yet."
-        )
-    return _format_repo_detail(record)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Repository '{owner}/{repo}' not found.")
+    return format_repo_detail(record)
 
 
+# Lists recently ingested repositories.
 @router.get("", response_model=List[RepoSummary])
 async def list_repos_endpoint(limit: int = 20):
-    """
-    Lists the most recently ingested repositories.
-    """
-    records = list_repositories(limit=limit)
-    return [_format_repo_summary(r) for r in records]
+    return [format_repo_summary(r) for r in list_repositories(limit=limit)]
