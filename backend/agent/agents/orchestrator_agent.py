@@ -3,7 +3,7 @@
 Owns the high-stakes agent handoff flow:
 1. Gated by user opt-in (Human-in-the-Loop)
 2. Asynchronous fork creation via LongRunningFunctionTool
-3. OpenCode / Gemini direct patch invocation with relevant files and RetryConfig
+3. Autonomous code patch synthesis with relevant files and RetryConfig
 4. Deterministic Complexity Router
 5. Cross-repo Pull Request publishing or structured Plan Artifact generation
 

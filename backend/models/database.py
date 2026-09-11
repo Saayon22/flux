@@ -3,6 +3,7 @@ Database initialization and connection management using SQLite.
 Stores repository metadata, documentation text, clone paths, and ingestion state.
 """
 
+import json
 import sqlite3
 from typing import Optional, Dict, Any, List
 from contextlib import contextmanager
@@ -120,6 +121,26 @@ def init_db() -> None:
                 estimated_complexity TEXT NOT NULL,
                 model_used TEXT NOT NULL,
                 is_fallback INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS handoff_results (
+                id TEXT PRIMARY KEY,
+                repo_id TEXT NOT NULL,
+                issue_number INTEGER NOT NULL,
+                decision TEXT NOT NULL,
+                fork_ref TEXT,
+                fork_url TEXT,
+                pr_url TEXT,
+                pr_number INTEGER,
+                branch TEXT,
+                diff TEXT,
+                diff_stats_json TEXT NOT NULL,
+                plan_json TEXT,
+                message TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE
@@ -476,4 +497,124 @@ def get_issue_explanation(repo_id: str, issue_number: int) -> Optional[Dict[str,
         )
         row = cursor.fetchone()
         return dict(row) if row else None
+
+
+def save_handoff_result(
+    repo_id: str,
+    issue_number: int,
+    result_data: Dict[str, Any],
+    now_iso: str
+) -> None:
+    """
+    Inserts or updates a Google ADK agent handoff result (PR or Plan Artifact) in SQLite.
+    """
+    handoff_id = f"{repo_id.lower()}#{issue_number}"
+    fork_info = result_data.get("fork") or {}
+    pr_info = result_data.get("pr") or {}
+    plan_info = result_data.get("plan")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO handoff_results (
+                id, repo_id, issue_number, decision, fork_ref, fork_url,
+                pr_url, pr_number, branch, diff, diff_stats_json,
+                plan_json, message, created_at, updated_at
+            ) VALUES (
+                :id, :repo_id, :issue_number, :decision, :fork_ref, :fork_url,
+                :pr_url, :pr_number, :branch, :diff, :diff_stats_json,
+                :plan_json, :message, :created_at, :updated_at
+            )
+            ON CONFLICT(id) DO UPDATE SET
+                decision=excluded.decision,
+                fork_ref=excluded.fork_ref,
+                fork_url=excluded.fork_url,
+                pr_url=excluded.pr_url,
+                pr_number=excluded.pr_number,
+                branch=excluded.branch,
+                diff=excluded.diff,
+                diff_stats_json=excluded.diff_stats_json,
+                plan_json=excluded.plan_json,
+                message=excluded.message,
+                updated_at=excluded.updated_at
+        """, {
+            "id": handoff_id,
+            "repo_id": repo_id.lower(),
+            "issue_number": issue_number,
+            "decision": result_data.get("decision", "pr"),
+            "fork_ref": fork_info.get("fork_ref"),
+            "fork_url": fork_info.get("fork_url"),
+            "pr_url": pr_info.get("pr_url") if pr_info else None,
+            "pr_number": pr_info.get("pr_number") if pr_info else None,
+            "branch": pr_info.get("branch") if pr_info else None,
+            "diff": result_data.get("diff", ""),
+            "diff_stats_json": json.dumps(result_data.get("diff_stats") or {}),
+            "plan_json": json.dumps(plan_info) if plan_info else None,
+            "message": result_data.get("message", ""),
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        })
+
+
+def get_handoff_result(repo_id: str, issue_number: int) -> Optional[Dict[str, Any]]:
+    """
+    Retrieves the cached Google ADK agent handoff result for an issue.
+    """
+    handoff_id = f"{repo_id.lower()}#{issue_number}"
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM handoff_results WHERE id = ?",
+            (handoff_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        row_dict = dict(row)
+        diff_stats = {}
+        if row_dict.get("diff_stats_json"):
+            try:
+                diff_stats = json.loads(row_dict["diff_stats_json"])
+            except Exception:
+                diff_stats = {}
+
+        plan_info = None
+        if row_dict.get("plan_json"):
+            try:
+                plan_info = json.loads(row_dict["plan_json"])
+            except Exception:
+                plan_info = None
+
+        pr_info = None
+        if row_dict.get("pr_url"):
+            pr_info = {
+                "status": "success",
+                "action": "pull_request_opened",
+                "pr_url": row_dict["pr_url"],
+                "pr_number": row_dict["pr_number"] or 1,
+                "branch": row_dict["branch"] or f"flux/fix-issue-{issue_number}",
+                "fork_ref": row_dict["fork_ref"] or "",
+            }
+
+        return {
+            "status": "success",
+            "authorized": True,
+            "repo_id": row_dict["repo_id"],
+            "issue_number": row_dict["issue_number"],
+            "fork": {
+                "fork_ref": row_dict["fork_ref"] or "",
+                "fork_url": row_dict["fork_url"] or "",
+                "provisioned": True,
+            },
+            "diff": row_dict.get("diff", ""),
+            "diff_stats": diff_stats,
+            "decision": row_dict["decision"],
+            "pr": pr_info,
+            "plan": plan_info,
+            "message": row_dict.get("message", ""),
+            "created_at": row_dict["created_at"],
+            "updated_at": row_dict["updated_at"],
+        }
+
 

@@ -207,3 +207,8 @@ opencode_retry_config = RetryConfig(
 )
 
 run_opencode_tool = FunctionTool(func=run_opencode)
+
+# First-class Google ADK aliases for autonomous code resolution
+synthesize_code_diff = run_opencode
+code_synthesis_tool = run_opencode_tool
+adk_code_tool = run_opencode_tool

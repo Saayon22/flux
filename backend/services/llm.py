@@ -1,7 +1,7 @@
 """
 LLM Repository Understanding Service.
 Generates plain-English overview, feature map, and architecture summary from a repository digest
-using OpenAI structured JSON output, with a deterministic grounded fallback for offline/demo reliability.
+using Google Gemini structured JSON output, with a deterministic grounded fallback for offline/demo reliability.
 """
 
 import json
@@ -20,7 +20,7 @@ from models.understanding import (
 
 class LLMUnderstandingSchema(BaseModel):
     """
-    Pydantic schema used for OpenAI structured JSON output response.
+    Pydantic schema used for Google Gemini structured JSON output response.
     """
     overview: str = Field(
         ...,
@@ -152,8 +152,8 @@ async def generate_repository_understanding(
     repo_id: str
 ) -> RepoUnderstanding:
     """
-    Generates plain-English repository understanding using OpenAI structured JSON schema.
-    Falls back gracefully to a deterministic grounded generator if OpenAI API is unavailable.
+    Generates plain-English repository understanding using Google Gemini structured JSON schema.
+    Falls back gracefully to a deterministic grounded generator if Gemini API is unavailable.
     
     Args:
         repo_data: Stored repository metadata dictionary.

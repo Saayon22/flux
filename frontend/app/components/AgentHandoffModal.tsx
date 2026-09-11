@@ -7,6 +7,7 @@ import {
   AgentHandoffResponse,
   triggerAgentHandoff,
   chatWithAgent,
+  getHandoffResult,
 } from "../lib/api";
 
 interface AgentHandoffModalProps {
@@ -56,8 +57,33 @@ export default function AgentHandoffModal({
           text: `Hello! I am the flux Google ADK Agent. I am ready to resolve Issue #${issue.number} ("${issue.title}"). Confirm opt-in to begin autonomous resolution.`,
         },
       ]);
+
+      // Check if an autonomous handoff (PR or Plan Artifact) was already generated and persisted in SQLite
+      getHandoffResult(owner, repo, issue.number).then((cached) => {
+        if (cached) {
+          setResult(cached);
+          setStep("completed");
+          if (cached.decision === "pr" && cached.pr) {
+            setChatHistory((prev) => [
+              ...prev,
+              {
+                role: "agent",
+                text: `Retrieved persisted Pull Request from SQLite: ${cached.pr?.pr_url} (#${cached.pr?.pr_number}).`,
+              },
+            ]);
+          } else if (cached.plan) {
+            setChatHistory((prev) => [
+              ...prev,
+              {
+                role: "agent",
+                text: `Retrieved persisted Implementation Plan Artifact from SQLite: "${cached.plan?.title}".`,
+              },
+            ]);
+          }
+        }
+      });
     }
-  }, [isOpen, issue]);
+  }, [isOpen, issue, owner, repo]);
 
   if (!isOpen) return null;
 
@@ -115,6 +141,24 @@ export default function AgentHandoffModal({
       setCopiedDiff(true);
       setTimeout(() => setCopiedDiff(false), 2500);
     }
+  };
+
+  const handleDownloadPlan = () => {
+    if (!result?.plan) return;
+    const md =
+      result.plan.markdown_content ||
+      `# ${result.plan.title}\n\n${result.plan.summary}\n\n## Refactoring Roadmap\n${result.plan.steps
+        .map((s, idx) => `- [ ] Step ${idx + 1}: ${s}`)
+        .join("\n")}\n\n## Risk Rating\n${result.plan.estimated_risk}`;
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `flux-plan-issue-${issue.number}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleSendChatMessage = async (e: React.FormEvent) => {
@@ -462,24 +506,116 @@ export default function AgentHandoffModal({
 
                   {/* Plan Artifact Display (if High Complexity) */}
                   {result.plan && (
-                    <div className="p-4 bg-amber-950/15 border border-amber-800/40 rounded-xl space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h5 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                          Structured Implementation Plan
-                        </h5>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/50">
-                          Risk: {result.plan.estimated_risk}
-                        </span>
-                      </div>
-                      <p className="text-xs text-neutral-300">{result.plan.summary}</p>
-                      <div className="space-y-1 pt-1">
-                        {result.plan.steps.map((st, sIdx) => (
-                          <div key={sIdx} className="text-xs text-neutral-300 flex items-start gap-2">
-                            <span className="text-amber-400 font-bold">•</span>
-                            <span>{st}</span>
+                    <div className="p-5 bg-amber-950/20 border border-amber-800/50 rounded-xl space-y-4">
+                      {/* Plan Header & Download Action */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-800/30 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-lg">📋</span>
+                          <div>
+                            <h5 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                              Implementation Plan Artifact
+                            </h5>
+                            <p className="text-[11px] text-neutral-400">
+                              Diff exceeds single-PR safety bounds. Decomposed into a safe refactoring plan.
+                            </p>
                           </div>
-                        ))}
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-amber-900/60 text-amber-200 border border-amber-700/60">
+                            Risk: {result.plan.estimated_risk}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleDownloadPlan}
+                            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-amber-950 cursor-pointer"
+                          >
+                            <span>📥</span>
+                            <span>Download Plan (.md)</span>
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Summary */}
+                      <div className="p-3 bg-neutral-900/80 rounded-lg border border-neutral-800 text-xs text-neutral-300 leading-relaxed">
+                        {result.plan.summary}
+                      </div>
+
+                      {/* Affected Modules */}
+                      {result.plan.affected_modules && result.plan.affected_modules.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                            Affected Modules (AST Grounded):
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {result.plan.affected_modules.map((mod, mIdx) => (
+                              <span
+                                key={mIdx}
+                                className="px-2 py-0.5 font-mono text-xs bg-neutral-900 text-amber-300 rounded border border-amber-900/60"
+                              >
+                                {mod}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Refactoring Steps */}
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                          Multi-Stage Refactoring Roadmap:
+                        </span>
+                        <div className="space-y-1.5">
+                          {result.plan.steps.map((st, sIdx) => (
+                            <div
+                              key={sIdx}
+                              className="text-xs text-neutral-300 flex items-start gap-2 bg-neutral-900/60 p-2 rounded-lg border border-neutral-800/80"
+                            >
+                              <span className="text-amber-400 font-mono font-bold shrink-0">
+                                0{sIdx + 1}
+                              </span>
+                              <span>{st}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Quality Assurance Checklist */}
+                      {result.plan.quality_assurance && result.plan.quality_assurance.length > 0 && (
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                            Quality Assurance &amp; Verification Checklist:
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {result.plan.quality_assurance.map((qa, qIdx) => (
+                              <div
+                                key={qIdx}
+                                className="text-xs text-neutral-400 flex items-center gap-2 bg-neutral-900/40 p-2 rounded-lg border border-neutral-800"
+                              >
+                                <span className="text-emerald-400 font-bold">✓</span>
+                                <span>{qa}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Reviewers */}
+                      {result.plan.recommended_reviewers && (
+                        <div className="flex items-center gap-2 pt-1 text-xs text-neutral-400">
+                          <span className="font-semibold text-neutral-500">Recommended Reviewers:</span>
+                          <div className="flex gap-1.5">
+                            {result.plan.recommended_reviewers.map((r, rIdx) => (
+                              <span
+                                key={rIdx}
+                                className="px-2 py-0.5 rounded bg-neutral-900 text-neutral-300 font-mono text-[11px] border border-neutral-800"
+                              >
+                                @{r}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

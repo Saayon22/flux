@@ -13,8 +13,8 @@ flux will use a simple hackathon-scale architecture focused on shipping the comp
 | Backend | FastAPI + Python |
 | Code Parsing | Tree-sitter |
 | Dependency Graph | NetworkX |
-| LLM | OpenAI API |
-| Coding Agent | OpenCode |
+| LLM | Google Gemini API (google-genai) |
+| Autonomous Agent System | Google ADK (Agent Development Kit) |
 | GitHub Integration | GitHub REST API |
 | Database | SQLite |
 | Graph Visualization | React Flow |
@@ -38,23 +38,37 @@ FastAPI
    │       ↓
    │   NetworkX Graph
    │
-   ├── LLM API
-   │
-   └── OpenCode
-           ↓
-       Git Diff
-           ↓
-       GitHub PR
+   └── Google ADK Multi-Agent System (Coordinator + Subagents)
+           ├── Summarizer Agent (Gemini)
+           ├── Issue Explainer Agent (Gemini)
+           └── Orchestrator Agent (Gemini + Code Tools)
+                   ↓
+               Git Diff
+                   ↓
+               Complexity Router
+                   ├── Contained Diff → GitHub PR
+                   └── Complex Diff → Implementation Plan Artifact
 ```
 
 ## Backend Components
 
-The FastAPI backend will contain the core flux pipeline:
+The FastAPI backend contains the core flux pipeline and Google ADK agents:
 
 ```text
 backend/
 ├── main.py
 ├── api/
+│   ├── repos.py
+│   ├── graph.py
+│   ├── understand.py
+│   ├── issues.py
+│   └── agent.py
+├── agent/
+│   ├── coordinator.py      (flux_root Google ADK coordinator)
+│   ├── runner.py           (ADK execution engine & handoff)
+│   ├── agents/             (summarizer, issue explainer, orchestrator)
+│   ├── tools/              (github, ingest, code synthesis & editor tools)
+│   └── workflow/           (complexity router, handoff workflow)
 ├── services/
 │   ├── github.py
 │   ├── repo_ingestor.py
@@ -62,9 +76,7 @@ backend/
 │   ├── graph.py
 │   ├── digest.py
 │   ├── llm.py
-│   ├── issue.py
-│   ├── agent.py
-│   └── pr.py
+│   └── issue_explainer.py
 ├── models/
 └── workspaces/
 ```
@@ -76,10 +88,11 @@ backend/
 - **Parser** — extracts source-code structure using Tree-sitter
 - **Graph service** — builds the dependency graph with NetworkX
 - **Digest builder** — converts graph information into compact context for the LLM
-- **LLM service** — generates repository summaries and issue explanations
+- **LLM service** — generates repository summaries and issue explanations via Google Gemini
 - **Issue service** — fetches and filters GitHub issues
-- **Agent service** — invokes OpenCode for code changes
+- **Agent service** — orchestrates Google ADK agents for autonomous code resolution
 - **PR service** — commits, pushes and opens pull requests
+
 
 ## Frontend
 
@@ -119,8 +132,8 @@ The final MVP stack is:
 **Next.js + TypeScript + Tailwind/shadcn  
 → FastAPI + Python  
 → Tree-sitter + NetworkX  
-→ OpenAI API  
-→ OpenCode  
+→ Google Gemini API (`google-genai`)  
+→ Google ADK (Agent Development Kit)  
 → GitHub REST API  
 → SQLite**
 

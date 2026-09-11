@@ -41,11 +41,21 @@ def test_digest_builder():
     assert "## Dependency Graph Metrics" in digest
     assert "## Documentation Highlights" in digest
     print("[PASS] Repository digest generation verified")
-    return repo_record, digest
 
 
-async def test_llm_grounded_understanding(repo_record, digest):
+async def test_llm_grounded_understanding():
     """Verify grounded understanding generation returns complete overview, feature map, and flows."""
+    init_db()
+    repo_record = get_repository_by_id("octocat/hello-world")
+    assert repo_record is not None, "octocat/hello-world must be ingested first"
+
+    graph_record = get_graph_by_repo_id("octocat/hello-world")
+    assert graph_record is not None, "Graph must be built first"
+
+    import json
+    graph_resp = GraphResponse(**json.loads(graph_record["graph_json"]))
+    digest = build_repository_digest(repo_record, graph_resp)
+
     understanding = await generate_repository_understanding(repo_record, digest, "octocat/hello-world")
 
     assert understanding.repo_id == "octocat/hello-world"
@@ -86,7 +96,8 @@ async def test_understanding_api_endpoints():
 
 if __name__ == "__main__":
     print("--- Running Phase 3 Tests ---")
-    repo_rec, dig = test_digest_builder()
-    asyncio.run(test_llm_grounded_understanding(repo_rec, dig))
+    test_digest_builder()
+    asyncio.run(test_llm_grounded_understanding())
     asyncio.run(test_understanding_api_endpoints())
     print("--- All Phase 3 Tests Passed Successfully! ---")
+

@@ -4,6 +4,11 @@ Configures CORS middleware, database lifecycle, and API routing.
 """
 
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

@@ -11,12 +11,20 @@ Handles:
     Health and capability discovery endpoint.
 """
 
+import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from config import settings
-from models.database import get_repository_by_id, get_issues_by_repo_id, get_issue_explanation
+from models.database import (
+    get_repository_by_id,
+    get_issues_by_repo_id,
+    get_issue_explanation,
+    save_handoff_result,
+    get_handoff_result,
+)
 from agent.runner import AgentRunner, run_agent_handoff
 from agent.config import DEFAULT_CHEAP_MODEL, DEFAULT_STRONGEST_MODEL
 
@@ -43,8 +51,39 @@ class ChatResponse(BaseModel):
 
 @router.get("/api/agent/status")
 async def get_agent_status():
-    """Returns Google ADK agent system status, model configuration, and capabilities."""
+    """Returns Google ADK agent system status, model configuration, GitHub rate limit, and capabilities."""
     has_api_key = bool(settings.effective_api_key)
+
+    github_info = {
+        "authenticated": False,
+        "user": None,
+        "limit": 60,
+        "remaining": 60,
+        "reset": None,
+    }
+    github_token = settings.github_token or os.getenv("GITHUB_TOKEN", "")
+    if github_token:
+        try:
+            import requests
+            headers = {
+                "Authorization": f"Bearer {github_token}",
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "flux-Agent",
+            }
+            rl_resp = requests.get("https://api.github.com/rate_limit", headers=headers, timeout=5)
+            if rl_resp.status_code == 200:
+                core = rl_resp.json().get("resources", {}).get("core", {})
+                github_info["authenticated"] = True
+                github_info["limit"] = core.get("limit", 5000)
+                github_info["remaining"] = core.get("remaining", 5000)
+                github_info["reset"] = core.get("reset")
+
+            u_resp = requests.get("https://api.github.com/user", headers=headers, timeout=5)
+            if u_resp.status_code == 200:
+                github_info["user"] = u_resp.json().get("login")
+        except Exception:
+            pass
+
     return {
         "status": "online" if has_api_key else "degraded",
         "agent": "flux_root",
@@ -56,14 +95,16 @@ async def get_agent_status():
             "strong": DEFAULT_STRONGEST_MODEL,
         },
         "has_api_key": has_api_key,
+        "github": github_info,
         "capabilities": [
             "Human-in-the-Loop Opt-In Gate",
             "AST & Dependency Graph Digest Synthesis",
             "Grounded Issue Triage (1-hop neighborhood)",
             "Lazy Fork Provisioning (LongRunningFunctionTool)",
-            "Autonomous Code Synthesis (OpenCode & Gemini)",
+            "Autonomous Code Synthesis (Google ADK & Gemini)",
             "Deterministic Complexity Routing (PR vs Plan Artifact)",
             "Cross-Repo PR Publication",
+            "Implementation Plan Artifact Persistence & Download",
         ],
     }
 
@@ -146,4 +187,27 @@ async def execute_issue_handoff(
         repo_path=repo_path,
     )
 
+    # 6. Persist handoff result (PR or Plan Artifact) to SQLite
+    if result.get("status") == "success":
+        try:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            save_handoff_result(repo_id, issue_number, result, now_iso)
+        except Exception as e:
+            # Non-blocking log
+            pass
+
     return result
+
+
+@router.get("/api/repos/{owner}/{repo}/issues/{issue_number}/handoff")
+async def get_issue_handoff_status(owner: str, repo: str, issue_number: int):
+    """Retrieves cached agent handoff results (PR or Plan Artifact) for an issue."""
+    repo_id = f"{owner.lower()}/{repo.lower()}"
+    record = get_handoff_result(repo_id, issue_number)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No agent handoff record found for issue #{issue_number} in {owner}/{repo}."
+        )
+    return record
+

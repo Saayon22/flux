@@ -12,16 +12,16 @@ flux takes a GitHub URL, builds a grounded understanding of the repo (via static
 3. **Browse & select an issue** → User filters live GitHub issues by label (`good-first-issue`, `bug`, `documentation`, etc.).
 4. **Understand the issue** → LLM explains the selected issue in plain English, using the dependency graph to identify which files/functions it likely touches, plus a real-world analogy and a concrete "what do I actually need to change" summary.
 5. **Decide** → User chooses to either work on it themselves, or hand it off to the agent.
-6. **Agent handoff (opt-in)** → Only at this point does flux fork the repo (lazy forking — no fork is created until a user actually requests a handoff), poll until the fork is ready, then invoke OpenCode in headless mode with the issue context + relevant files from the graph, and let it edit code.
+6. **Agent handoff (opt-in)** → Only at this point does flux fork the repo (lazy forking — no fork is created until a user actually requests a handoff), polls until the fork is ready, then invokes the Google ADK Orchestrator Agent with the issue context + relevant files from the graph to synthesize code modifications.
 7. **Complexity routing** → If the resulting diff is small/contained, flux commits, pushes, and opens a PR automatically. If it's large/crosses many modules/fails validation, flux instead generates a short implementation plan artifact instead of forcing a PR.
 
 ## 4. Scope
 
 **MVP (demo-critical):**
 - Full pipeline works end-to-end on real, arbitrary public repos, including the fork flow (fork → poll until ready → push → cross-repo PR).
-- AST parsing + dependency graph for at least one major language (pick based on team's stack, e.g. JS/TS or Python).
-- LLM repo summary + issue explanation, grounded in the graph.
-- OpenCode headless invocation (`opencode run --dir <path> --model <provider/model> "<prompt>" --auto`) producing a real diff.
+- AST parsing + dependency graph for at least one major language (e.g. Python, JS/TS).
+- Google Gemini repo summary + issue explanation, grounded in the graph.
+- Google ADK Autonomous Agent handoff with code patch synthesis producing a real diff.
 - Complexity-routing fallback (plan artifact vs. PR).
 - Lazy forking: no fork is created on URL paste; fork happens only when a user requests agent handoff on a specific issue.
 - Issue explanations generated on-demand (only when a user opens a specific issue), not upfront for every filtered issue.
@@ -33,7 +33,7 @@ flux takes a GitHub URL, builds a grounded understanding of the repo (via static
 - Multi-provider model selection exposed to the user.
 - Test-running the agent's diff before opening the PR.
 
-**Model/provider choice:** not yet decided — architecture should treat the LLM (for summarization/explanation) and OpenCode's model backend as swappable config, not hardcoded. Design intent: route summarization/explanation (low stakes, high volume) to a cheap/free-tier model called directly via API; reserve the strongest available coding-capable model specifically for OpenCode's code-editing step (low volume, highest stakes). OpenCode should be used **only** for the code-editing/diff step — not for summarization or issue explanation, which are plain text-in/text-out tasks better served by a direct LLM API call.
+**Model/provider choice:** Google Gemini API (`google-genai`) and Google ADK (`google-adk`). Gemini is utilized for summarization, issue triage, and high-stakes autonomous code synthesis, coordinated through Google ADK multi-agent architecture.
 
 ## 5. Architecture Components
 | Component | Responsibility |
@@ -41,26 +41,26 @@ flux takes a GitHub URL, builds a grounded understanding of the repo (via static
 | Repo Ingestor | Clone repo (read-only, happens immediately on URL paste, regardless of fork status), read README/CONTRIBUTING/wiki |
 | AST/Dependency Parser | tree-sitter parses each file → query-extract imports/functions/calls into per-file JSON → networkx graph → compute in-degree/out-degree/clusters (e.g. Louvain community detection) |
 | Digest Builder | Template the graph's computed metrics + top-N central files + clusters into a short plain-text/JSON digest for LLM prompts (never sends raw AST or full source by default) |
-| Summarizer (LLM) | Turn the digest + docs into plain-English overview & architecture explanation (direct API call, not OpenCode) |
+| Summarizer (LLM) | Turn the digest + docs into plain-English overview & architecture explanation (Google Gemini API call via `google-genai`) |
 | Issue Fetcher | Pull & filter live GitHub issues by label |
-| Issue Explainer (LLM) | On-demand: build a 1-hop graph neighborhood digest around files the issue mentions, translate issue + that digest into plain English, analogy, and task summary (direct API call, not OpenCode) |
-| Graph Renderer (UI) | Obsidian-style force-directed graph (e.g. d3-force / react-force-graph) — draggable, zoomable node-link view of the dependency graph; caps/clusters nodes to avoid an unreadable "hairball" on large repos |
-| Agent Orchestrator | On handoff only: fork repo (lazy, with poll/retry for provisioning) or branch directly if pre-staged/owned, invoke OpenCode headless (`opencode run --dir <path> --model <provider/model> "<prompt>" --auto`) with issue context + relevant files from the graph, capture diff result |
+| Issue Explainer (LLM) | On-demand: build a 1-hop graph neighborhood digest around files the issue mentions, translate issue + that digest into plain English, analogy, and task summary (Google Gemini API call via `google-genai`) |
+| Graph Renderer (UI) | Obsidian-style force-directed graph (e.g. React Flow) — draggable, zoomable node-link view of the dependency graph; caps/clusters nodes to avoid an unreadable "hairball" on large repos |
+| Agent Orchestrator | On handoff only: fork repo (lazy, with active poll/retry for provisioning), invoke Google ADK Orchestrator Agent with issue context + relevant files from the graph, synthesize unified code diff, capture diff result |
 | Complexity Router | Decide PR vs. plan-artifact based on diff size/scope/validation result |
 | PR Publisher | Commit, push, open PR via GitHub API |
 
 ## 6. LLM Call Budget (per session)
 | Step | Calls | Notes |
 |---|---|---|
-| Repo summary/overview | 1 (up to 2–3 if split into overview/feature-map/architecture) | Direct API call |
+| Repo summary/overview | 1 (up to 2–3 if split into overview/feature-map/architecture) | Direct Gemini API call |
 | Issue explanation | 1 per issue actually opened | On-demand only, not upfront for the full filtered list |
-| Agent handoff (OpenCode) | 1 invocation from our code | May internally trigger several sub-calls inside OpenCode's own agent loop — budget/test against free-tier limits early |
+| Agent handoff (Google ADK) | 1 invocation from our code | Multi-agent orchestration loop with code synthesis and Complexity Router |
 | Plan artifact | 1 | Only fires when complexity routing triggers |
 
 ## 7. Key Risks & Mitigations
 - **Agent fix quality varies by issue complexity** (inherent, not solvable by us) → Complexity Router falls back to a plan artifact instead of a broken/oversized PR.
 - **Fork provisioning race condition** (GitHub forks are async) → poll/retry before pushing to the fork.
-- **OpenCode/LLM call failures during live demo** → cache a known-good fallback result for the rehearsed demo repo/issue.
+- **Google ADK/Gemini call failures during live demo** → cache a known-good fallback result for the rehearsed demo repo/issue.
 - **Graph parsing failing on unusual repo structures** → scope MVP language support to what's reliably testable before demo day.
 
 ## 8. Success Criteria (Demo)

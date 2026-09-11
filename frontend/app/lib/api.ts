@@ -417,6 +417,16 @@ export interface PlanArtifact {
   estimated_risk: string;
   recommended_reviewers: string[];
   issue_context?: string;
+  problem_statement?: string;
+  affected_modules?: string[];
+  quality_assurance?: string[];
+  markdown_content?: string;
+  diff_metrics?: {
+    line_count: number;
+    num_files: number;
+    threshold_lines: number;
+    threshold_files: number;
+  };
 }
 
 export interface AgentHandoffResponse {
@@ -435,6 +445,8 @@ export interface AgentHandoffResponse {
   pr?: PullRequestResult | null;
   plan?: PlanArtifact | null;
   message: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AgentStatusResponse {
@@ -443,8 +455,36 @@ export interface AgentStatusResponse {
   framework: string;
   sdk: string;
   model: string;
+  models?: {
+    cheap: string;
+    strong: string;
+  };
   has_api_key: boolean;
+  github?: {
+    authenticated: boolean;
+    user: string | null;
+    limit: number;
+    remaining: number;
+    reset: number | null;
+  };
   capabilities: string[];
+}
+
+/**
+ * Retrieves cached agent handoff results (PR or Plan Artifact) for an issue if previously executed.
+ */
+export async function getHandoffResult(
+  owner: string,
+  repo: string,
+  issueNumber: number
+): Promise<AgentHandoffResponse | null> {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/issues/${issueNumber}/handoff`);
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
 }
 
 /**

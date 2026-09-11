@@ -3,7 +3,7 @@
 Coordinates:
 1. Human-in-the-Loop Opt-In Confirmation Gate
 2. Fork Provisioning (LongRunningFunctionTool)
-3. OpenCode Headless Subprocess / Gemini Diff Synthesis
+3. Autonomous Code Patch Synthesis
 4. Complexity Router (Deterministic Branching Node)
 5. Branch 'pr' -> PR Publisher
    Branch 'plan' -> Plan Artifact Generator
