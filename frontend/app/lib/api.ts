@@ -494,9 +494,10 @@ export async function getHandoffResult(
 }
 
 /**
- * Executes the Phase 6 & 7 Google ADK Agent Handoff workflow for a specific issue.
+ * Executes the Google ADK Agent Handoff workflow for a specific issue.
  */
 export async function triggerAgentHandoff(
+
   owner: string,
   repo: string,
   issueNumber: number,

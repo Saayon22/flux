@@ -47,3 +47,5 @@ root_agent = Agent(
         list_files_tool,
     ],
 )
+flux_root = root_agent
+

@@ -116,6 +116,7 @@ flux/
 │   │   └── agent.py                # ADK Agent handoff, chat, and status
 │   ├── services/                   # Core business logic & parser services
 │   ├── models/                     # SQLite database models & Pydantic schemas
+│   ├── tests/                      # Automated test suite (API, Services, Agent)
 │   └── workspaces/                 # Cloned repository filesystem
 ├── frontend/
 │   ├── app/
@@ -129,8 +130,7 @@ flux/
 │   └── package.json                # Next.js dependencies
 ├── AGENTS.md                       # Developer & coding agent operating rules
 ├── flux_PRD.md                     # Product Requirements Document
-├── flux_Tech_Stack.md              # Technical Stack Specification
-└── flux_Phase_Build_Plan.md        # Phase-wise milestone plan
+└── flux_Tech_Stack.md              # Technical Stack Specification
 ```
 
 ---
@@ -154,7 +154,7 @@ Edit `.env` and set your Google Gemini API Key and GitHub Personal Access Token:
 ```ini
 # Google Gemini / ADK Configuration
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-3.6-flash
+GEMINI_MODEL=gemini-2.5-flash
 
 # GitHub Token (Optional: elevates rate limits and enables live fork/PR publishing)
 GITHUB_TOKEN=your_github_personal_access_token_here
@@ -196,37 +196,27 @@ Open `http://localhost:3000` in your browser.
 
 ## Running the Verification Suite
 
-Run all 17 automated test suites against the backend:
+Run all automated test suites against the backend:
 
 ```bash
-# From repository root (or inside backend/)
-.\backend\.venv\Scripts\python.exe -m pytest backend/ -v
+# Run complete test suite (API, Services, and Agent):
+cd backend
+.\.venv\Scripts\pytest -v
 ```
 
-Or run individual integration test modules:
+Or run individual focused test suites:
 
 ```bash
-# End-to-End Integration Suite (Complexity Routing, SQLite, Rate Limit & Handoff):
-.\backend\.venv\Scripts\python.exe backend/test_phase7_phase8_e2e.py
+# REST API Endpoints & Health:
+.\.venv\Scripts\pytest tests/test_api.py -v
 
-# Agent Status, Opt-In Gate, Handoff & Chat:
-.\backend\.venv\Scripts\python.exe backend/test_agent.py
+# Tree-sitter AST, NetworkX Graph, Ingestion, & Issues:
+.\.venv\Scripts\pytest tests/test_services.py -v
 
-# FastAPI Endpoints & Health:
-.\backend\.venv\Scripts\python.exe backend/test_api.py
-
-# Tree-sitter AST & NetworkX Graph:
-.\backend\.venv\Scripts\python.exe backend/test_graph.py
-
-# Repository Ingestion & Workspace:
-.\backend\.venv\Scripts\python.exe backend/test_ingest.py
-
-# GitHub Issue Discovery & Explanation:
-.\backend\.venv\Scripts\python.exe backend/test_issues.py
-
-# Grounded Repository Understanding:
-.\backend\.venv\Scripts\python.exe backend/test_understanding.py
+# Google ADK Coordinator, Complexity Router, & Handoff Workflow:
+.\.venv\Scripts\pytest tests/test_agent.py -v
 ```
+
 
 ---
 

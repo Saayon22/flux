@@ -165,8 +165,9 @@ export default function ObsidianGraphCanvas({
     setSelectedNode(target);
   }, []);
 
-  // Handle external focus triggers (e.g. from Phase 3 Understanding cards)
+  // Handle external focus triggers (e.g. from Understanding cards)
   useEffect(() => {
+
     if (focusedNodeId) {
       centerOnNode(focusedNodeId);
     }

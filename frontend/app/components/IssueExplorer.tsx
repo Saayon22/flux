@@ -2,11 +2,12 @@
 
 /**
  * IssueExplorer.tsx
- * Phase 5 Component: GitHub Issue Discovery & Grounded Explanation.
+ * GitHub Issue Discovery & Grounded Explanation component.
  * Fetches open issues, filters by label/search, translates technical bugs into
  * plain-English explanations with real-world analogies and implementation steps,
  * and links directly to relevant files in the Graph Explorer.
  */
+
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
