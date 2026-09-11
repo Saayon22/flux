@@ -2,13 +2,22 @@
 
 /**
  * NodeInspectorDrawer.tsx
- * Dedicated side drawer for deep file and function inspection in the Graph Explorer.
- * Displays node metadata, inbound/outbound dependencies, extracted AST symbols,
- * and live source code preview fetched from the local workspace.
+ * Akaru Prestige Edition: AST Node & Code Inspector Drawer.
  */
 
 import React, { useState, useEffect } from "react";
 import { GraphNode, GraphEdge, fetchFileContent, FileContentResponse } from "../lib/api";
+import {
+  FileCode,
+  ArrowDownLeft,
+  ArrowUpRight,
+  X,
+  Layers,
+  Copy,
+  Check,
+  Code2,
+  Terminal,
+} from "lucide-react";
 
 interface NodeInspectorDrawerProps {
   owner: string;
@@ -27,22 +36,21 @@ export default function NodeInspectorDrawer({
   onClose,
   onSelectNode,
 }: NodeInspectorDrawerProps) {
-  const [activeTab, setActiveTab] = useState<"connections" | "code">("connections");
+  const [activeTab, setActiveTab] = useState<"connections" | "code" | "symbols">("connections");
   const [codeLoading, setCodeLoading] = useState(false);
   const [codeData, setCodeData] = useState<FileContentResponse | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
+  const [copiedPath, setCopiedPath] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
 
-  // Inbound edges: files that import this node
   const inboundDependencies = allEdges
     .filter((e) => e.target === node.id)
     .map((e) => e.source);
 
-  // Outbound edges: files this node imports
   const outboundDependencies = allEdges
     .filter((e) => e.source === node.id)
     .map((e) => e.target);
 
-  // Fetch file content whenever switching to 'code' tab or when node changes
   useEffect(() => {
     if (activeTab !== "code") return;
     let isMounted = true;
@@ -68,238 +76,264 @@ export default function NodeInspectorDrawer({
     };
   }, [owner, repo, node.id, activeTab]);
 
-  const getLangBadgeColor = (lang: string) => {
-    switch (lang.toLowerCase()) {
-      case "python":
-        return "bg-emerald-950 text-emerald-300 border-emerald-800";
-      case "javascript":
-      case "typescript":
-        return "bg-sky-950 text-sky-300 border-sky-800";
-      default:
-        return "bg-purple-950 text-purple-300 border-purple-800";
+  const copyToClipboard = (text: string, type: "path" | "code") => {
+    navigator.clipboard.writeText(text);
+    if (type === "path") {
+      setCopiedPath(true);
+      setTimeout(() => setCopiedPath(false), 2000);
+    } else {
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
     }
   };
 
   return (
-    <div className="absolute top-0 right-0 h-full w-96 max-w-full bg-neutral-900/98 backdrop-blur-md border-l border-neutral-800 shadow-2xl z-20 flex flex-col transition-transform duration-200">
+    <div className="absolute top-0 right-0 h-full w-[430px] max-w-full akaru-dropdown border-l border-white/20 shadow-2xl z-40 flex flex-col transition-all duration-300">
       {/* Drawer Header */}
-      <div className="p-4 border-b border-neutral-800 flex items-start justify-between gap-3 bg-neutral-950/60">
+      <div className="p-6 border-b border-white/10 bg-[#141414] flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span
-              className={`px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded border ${getLangBadgeColor(
-                node.language
-              )}`}
-            >
+          <div className="flex items-center gap-2 mb-2">
+            <span className="px-2.5 py-0.5 text-[10px] font-code uppercase tracking-wider rounded-md bg-[#e49366] text-[#0e0e0e] font-bold">
               {node.language}
             </span>
-            <span className="px-2 py-0.5 text-[10px] font-mono bg-neutral-800 text-neutral-400 rounded border border-neutral-700/60">
+            <span className="px-2.5 py-0.5 text-[10px] font-code bg-white/10 text-white rounded-md border border-white/20">
               Cluster #{node.cluster}
             </span>
           </div>
-          <h3 className="text-sm font-semibold text-white font-mono truncate" title={node.id}>
-            {node.label}
-          </h3>
-          <p className="text-[11px] font-mono text-neutral-500 truncate" title={node.id}>
-            {node.id}
-          </p>
+          <div className="flex items-center gap-2">
+            <FileCode className="w-4 h-4 text-[#e49366] shrink-0" />
+            <h3 className="text-base font-bold text-white truncate" title={node.id}>
+              {node.label}
+            </h3>
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-[11px] font-code text-[#9e9e9e] truncate max-w-xs" title={node.id}>
+              {node.id}
+            </p>
+            <button
+              type="button"
+              onClick={() => copyToClipboard(node.id, "path")}
+              className="text-white/60 hover:text-[#e49366] transition-colors p-0.5 cursor-pointer"
+              title="Copy file path"
+            >
+              {copiedPath ? <Check className="w-3.5 h-3.5 text-[#e49366]" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
 
         <button
           type="button"
           onClick={onClose}
-          className="p-1 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer text-base leading-none"
+          className="p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
           title="Close Inspector"
         >
-          &times;
+          <X className="w-5 h-5" />
         </button>
       </div>
 
       {/* Metrics Strip */}
-      <div className="grid grid-cols-4 gap-1 p-3 bg-neutral-950/40 border-b border-neutral-800 text-center text-xs">
-        <div className="p-1.5 bg-neutral-900/80 rounded border border-neutral-800/80">
-          <div className="text-[10px] text-neutral-500 uppercase tracking-tight">In-Degree</div>
-          <div className="font-semibold text-emerald-400 text-xs mt-0.5">{node.in_degree}</div>
+      <div className="grid grid-cols-4 gap-2.5 p-4 bg-[#0e0e0e] border-b border-white/10 text-center">
+        <div className="p-2 bg-[#171717] rounded-xl border border-white/10">
+          <div className="text-[10px] text-[#9e9e9e] uppercase font-bold">In-Degree</div>
+          <div className="font-bold text-white text-sm mt-0.5">{node.in_degree}</div>
         </div>
-        <div className="p-1.5 bg-neutral-900/80 rounded border border-neutral-800/80">
-          <div className="text-[10px] text-neutral-500 uppercase tracking-tight">Out-Degree</div>
-          <div className="font-semibold text-sky-400 text-xs mt-0.5">{node.out_degree}</div>
+        <div className="p-2 bg-[#171717] rounded-xl border border-white/10">
+          <div className="text-[10px] text-[#9e9e9e] uppercase font-bold">Out-Degree</div>
+          <div className="font-bold text-[#e49366] text-sm mt-0.5">{node.out_degree}</div>
         </div>
-        <div className="p-1.5 bg-neutral-900/80 rounded border border-neutral-800/80">
-          <div className="text-[10px] text-neutral-500 uppercase tracking-tight">Centrality</div>
-          <div className="font-semibold text-amber-400 text-xs mt-0.5">
+        <div className="p-2 bg-[#171717] rounded-xl border border-white/10">
+          <div className="text-[10px] text-[#9e9e9e] uppercase font-bold">Centrality</div>
+          <div className="font-bold text-white text-sm mt-0.5">
             {node.centrality ? node.centrality.toFixed(3) : "0.000"}
           </div>
         </div>
-        <div className="p-1.5 bg-neutral-900/80 rounded border border-neutral-800/80">
-          <div className="text-[10px] text-neutral-500 uppercase tracking-tight">Lines</div>
-          <div className="font-semibold text-neutral-300 text-xs mt-0.5">{node.line_count}</div>
+        <div className="p-2 bg-[#171717] rounded-xl border border-white/10">
+          <div className="text-[10px] text-[#9e9e9e] uppercase font-bold">Lines</div>
+          <div className="font-bold text-white text-sm mt-0.5">{node.line_count}</div>
         </div>
       </div>
 
-      {/* Drawer Tabs */}
-      <div className="flex border-b border-neutral-800 text-xs bg-neutral-900/60">
+      {/* Drawer Tabs with Bright Active States */}
+      <div className="flex border-b border-white/10 text-xs bg-[#141414]">
         <button
           type="button"
           onClick={() => setActiveTab("connections")}
-          className={`flex-1 py-2.5 font-medium transition-colors cursor-pointer text-center ${
+          className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 ${
             activeTab === "connections"
-              ? "text-emerald-400 border-b-2 border-emerald-500 bg-neutral-900"
-              : "text-neutral-400 hover:text-neutral-200"
+              ? "text-[#e49366] border-[#e49366] bg-white/5 font-bold"
+              : "text-white/60 border-transparent hover:text-white"
           }`}
         >
-          Graph & Symbols
+          <Layers className="w-3.5 h-3.5" />
+          <span>Graph ({inboundDependencies.length + outboundDependencies.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("symbols")}
+          className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 ${
+            activeTab === "symbols"
+              ? "text-[#e49366] border-[#e49366] bg-white/5 font-bold"
+              : "text-white/60 border-transparent hover:text-white"
+          }`}
+        >
+          <Code2 className="w-3.5 h-3.5" />
+          <span>AST ({node.symbols ? node.symbols.length : 0})</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("code")}
-          className={`flex-1 py-2.5 font-medium transition-colors cursor-pointer text-center ${
+          className={`flex-1 py-3 font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-2 border-b-2 ${
             activeTab === "code"
-              ? "text-emerald-400 border-b-2 border-emerald-500 bg-neutral-900"
-              : "text-neutral-400 hover:text-neutral-200"
+              ? "text-[#e49366] border-[#e49366] bg-white/5 font-bold"
+              : "text-white/60 border-transparent hover:text-white"
           }`}
         >
-          Source Preview
+          <Terminal className="w-3.5 h-3.5" />
+          <span>Source</span>
         </button>
       </div>
 
-      {/* Drawer Body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-        {activeTab === "connections" ? (
-          <>
-            {/* Dependencies (Outbound) */}
+      {/* Tab Content */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+        {/* TAB 1: Connections */}
+        {activeTab === "connections" && (
+          <div className="space-y-4">
+            {/* Inbound Callers */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-neutral-300 uppercase tracking-wider">
-                  Imports / Dependencies ({outboundDependencies.length})
+              <div className="flex items-center justify-between text-xs font-bold text-white">
+                <span className="flex items-center gap-1.5 text-white">
+                  <ArrowDownLeft className="w-4 h-4 text-[#e49366]" />
+                  Imported by ({inboundDependencies.length})
                 </span>
-                <span className="text-[10px] text-neutral-500">Outbound</span>
+                <span className="text-[10px] text-[#9e9e9e] font-normal">Callers</span>
               </div>
-              {outboundDependencies.length > 0 ? (
-                <div className="flex flex-col gap-1">
-                  {outboundDependencies.map((target) => (
+              {inboundDependencies.length === 0 ? (
+                <p className="text-[11px] text-[#9e9e9e] italic bg-[#0e0e0e] p-3 rounded-xl border border-white/10">
+                  No other files import this module directly.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {inboundDependencies.map((depId) => (
                     <button
-                      key={target}
+                      key={depId}
                       type="button"
-                      onClick={() => onSelectNode(target)}
-                      className="text-left font-mono text-[11px] px-2.5 py-1.5 bg-neutral-950/80 hover:bg-neutral-800/80 border border-neutral-800 rounded transition-colors text-sky-300 hover:text-white flex items-center justify-between group cursor-pointer"
+                      onClick={() => onSelectNode(depId)}
+                      className="w-full text-left p-3 rounded-xl bg-[#1a1a1a] hover:bg-[#242424] text-white border border-white/10 hover:border-[#e49366] transition-all flex items-center justify-between group cursor-pointer"
                     >
-                      <span className="truncate">{target}</span>
-                      <span className="text-[10px] text-neutral-600 group-hover:text-neutral-400">
-                        &rarr;
+                      <span className="truncate font-code text-[11px]">{depId}</span>
+                      <span className="text-[10px] text-[#e49366] shrink-0 ml-2 font-bold">
+                        jump &rarr;
                       </span>
                     </button>
                   ))}
                 </div>
-              ) : (
-                <div className="p-2 text-[11px] text-neutral-500 italic bg-neutral-950/40 rounded border border-neutral-800/40">
-                  No internal repository imports.
-                </div>
               )}
             </div>
 
-            {/* Dependents (Inbound) */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-neutral-300 uppercase tracking-wider">
-                  Imported By ({inboundDependencies.length})
+            {/* Outbound Imports */}
+            <div className="space-y-2 pt-3 border-t border-white/10">
+              <div className="flex items-center justify-between text-xs font-bold text-white">
+                <span className="flex items-center gap-1.5 text-[#e49366]">
+                  <ArrowUpRight className="w-4 h-4 text-[#e49366]" />
+                  Imports ({outboundDependencies.length})
                 </span>
-                <span className="text-[10px] text-neutral-500">Inbound</span>
+                <span className="text-[10px] text-[#9e9e9e] font-normal">Dependencies</span>
               </div>
-              {inboundDependencies.length > 0 ? (
-                <div className="flex flex-col gap-1">
-                  {inboundDependencies.map((source) => (
+              {outboundDependencies.length === 0 ? (
+                <p className="text-[11px] text-[#9e9e9e] italic bg-[#0e0e0e] p-3 rounded-xl border border-white/10">
+                  No local dependencies imported.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {outboundDependencies.map((depId) => (
                     <button
-                      key={source}
+                      key={depId}
                       type="button"
-                      onClick={() => onSelectNode(source)}
-                      className="text-left font-mono text-[11px] px-2.5 py-1.5 bg-neutral-950/80 hover:bg-neutral-800/80 border border-neutral-800 rounded transition-colors text-emerald-300 hover:text-white flex items-center justify-between group cursor-pointer"
+                      onClick={() => onSelectNode(depId)}
+                      className="w-full text-left p-3 rounded-xl bg-[#1a1a1a] hover:bg-[#242424] text-white border border-white/10 hover:border-[#e49366] transition-all flex items-center justify-between group cursor-pointer"
                     >
-                      <span className="truncate">{source}</span>
-                      <span className="text-[10px] text-neutral-600 group-hover:text-neutral-400">
-                        &larr;
+                      <span className="truncate font-code text-[11px]">{depId}</span>
+                      <span className="text-[10px] text-[#e49366] shrink-0 ml-2 font-bold">
+                        jump &rarr;
                       </span>
                     </button>
                   ))}
                 </div>
-              ) : (
-                <div className="p-2 text-[11px] text-neutral-500 italic bg-neutral-950/40 rounded border border-neutral-800/40">
-                  Not imported by other repository files (entry point or leaf).
-                </div>
               )}
             </div>
+          </div>
+        )}
 
-            {/* AST Defined Symbols */}
-            <div className="space-y-2 pt-2 border-t border-neutral-800/80">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-neutral-300 uppercase tracking-wider">
-                  Defined Symbols ({node.symbols ? node.symbols.length : 0})
-                </span>
-                <span className="text-[10px] text-neutral-500">AST Extracted</span>
-              </div>
+        {/* TAB 2: AST Symbols */}
+        {activeTab === "symbols" && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs text-[#9e9e9e]">
+              <span>Parsed AST Symbols</span>
+              <span className="font-code text-white font-bold">{node.symbols ? node.symbols.length : 0} items</span>
+            </div>
 
-              {node.symbols && node.symbols.length > 0 ? (
-                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                  {node.symbols.map((sym, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2 bg-neutral-950/80 border border-neutral-800/80 rounded space-y-1"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-xs text-neutral-200 font-semibold truncate">
-                          {sym.name}
-                        </span>
-                        <span className="px-1.5 py-0.5 text-[9px] font-mono uppercase bg-neutral-800 text-neutral-400 rounded">
-                          {sym.type}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] text-neutral-500 font-mono">
-                        <span>Lines {sym.start_line} &ndash; {sym.end_line}</span>
-                      </div>
-                      {sym.docstring && (
-                        <p className="text-[10px] text-neutral-400 italic line-clamp-2">
-                          {sym.docstring}
-                        </p>
-                      )}
+            {!node.symbols || node.symbols.length === 0 ? (
+              <p className="text-[11px] text-[#9e9e9e] italic bg-[#0e0e0e] p-4 rounded-xl border border-white/10">
+                No function or class definitions extracted from this file.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {node.symbols.map((sym, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 bg-[#1a1a1a] rounded-xl border border-white/10 space-y-1"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white font-code text-[11px] truncate">
+                        {sym.name}
+                      </span>
+                      <span className="text-[9px] px-2 py-0.5 bg-[#e49366] text-[#0e0e0e] rounded-md font-bold uppercase font-code">
+                        {sym.type || "symbol"}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-2 text-[11px] text-neutral-500 italic bg-neutral-950/40 rounded border border-neutral-800/40">
-                  No top-level functions or classes extracted.
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          /* Code Preview Tab */
+                    {sym.start_line && (
+                      <div className="text-[10px] text-[#9e9e9e] font-code">
+                        Lines {sym.start_line} - {sym.end_line}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: Live Source Code */}
+        {activeTab === "code" && (
           <div className="space-y-3">
             {codeLoading && (
-              <div className="p-8 text-center space-y-2 animate-pulse">
-                <div className="text-xs font-medium text-emerald-400">Loading file content...</div>
-                <div className="text-[11px] text-neutral-500">Reading from local repository workspace</div>
+              <div className="p-8 text-center text-[#9e9e9e] text-xs">
+                Loading source from workspace...
               </div>
             )}
 
             {codeError && (
-              <div className="p-3 bg-red-950/60 border border-red-800 rounded text-red-200 text-xs">
+              <div className="p-3.5 bg-red-950/60 border border-red-800 rounded-xl text-red-300 text-xs">
                 {codeError}
               </div>
             )}
 
             {codeData && !codeLoading && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-[11px] text-neutral-400 px-1">
-                  <span>{codeData.line_count} lines</span>
-                  {codeData.is_truncated && (
-                    <span className="text-amber-400 text-[10px]">Preview capped for speed</span>
-                  )}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-xs text-[#9e9e9e]">
+                  <span className="font-code text-white font-bold">{codeData.line_count} lines</span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(codeData.content, "code")}
+                    className="btn-white px-3 py-1 text-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCode ? "Copied" : "Copy"}</span>
+                  </button>
                 </div>
 
-                <div className="relative rounded-lg overflow-hidden border border-neutral-800 bg-[#08090b]">
-                  <pre className="p-3 text-[11px] font-mono text-neutral-200 overflow-x-auto leading-relaxed max-h-[460px]">
-                    <code>{codeData.content}</code>
-                  </pre>
+                <div className="bg-[#0e0e0e] rounded-xl border border-white/15 p-4 overflow-x-auto max-h-[480px] text-[11px] leading-relaxed text-white">
+                  <pre className="font-code">{codeData.content}</pre>
                 </div>
               </div>
             )}

@@ -1,21 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "flux | Grounded Codebase Onboarding & Issue Solver",
+  title: "FLUX — Codebase Architecture & Autonomous Synthesis",
   description:
-    "Grounded repository understanding with AST dependency graphs, plain-English issue explanations, and autonomous agent handoffs.",
+    "Explore complex repository architectures, trace AST dependency networks, and solve issues autonomously with grounded AI agent synthesis.",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -25,7 +17,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className="antialiased bg-[#f7f4ec] text-[#171817] min-h-screen selection:bg-[#df7d4c]/30 selection:text-[#171817]"
+      >
         {children}
       </body>
     </html>
