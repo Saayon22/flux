@@ -72,6 +72,11 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # Agents
+.agent/
 .agents/
+.claude/
+.gemini/
+.opencode/
+
 .impeccable/
 
