@@ -17,7 +17,8 @@ async def fetch_repository_issues(
     owner: str,
     repo: str,
     force_refresh: bool = False,
-    label_filter: str = ""
+    label_filter: str = "",
+    state: str = "open",
 ) -> Tuple[List[IssueSummary], List[IssueLabel]]:
     """
     Fetches open GitHub issues for a repository, either from cache or live GitHub API.
@@ -27,6 +28,7 @@ async def fetch_repository_issues(
         repo: GitHub repository name.
         force_refresh: If True, fetches fresh issues from GitHub even if cached.
         label_filter: Optional label name to filter issues.
+        state: Issue state ('open', 'closed', or 'all').
         
     Returns:
         Tuple of (list of IssueSummary models, list of all available IssueLabel models).
@@ -35,9 +37,9 @@ async def fetch_repository_issues(
 
     # 1. Check SQLite cache first unless force refresh requested
     if not force_refresh:
-        cached_records = get_issues_by_repo_id(repo_id, label_filter=label_filter)
+        cached_records = get_issues_by_repo_id(repo_id, label_filter=label_filter, state=state)
         if cached_records:
-            all_records = get_issues_by_repo_id(repo_id)
+            all_records = get_issues_by_repo_id(repo_id, state=state)
             available_labels = _extract_available_labels(all_records)
             issue_summaries = [_record_to_issue_summary(r) for r in cached_records]
             return issue_summaries, available_labels
@@ -123,13 +125,12 @@ async def fetch_repository_issues(
             "updated_at": item.get("updated_at") or "",
         })
 
-    # 4. Save parsed issues into SQLite
-    if parsed_issues:
-        save_issues(repo_id, parsed_issues)
+    # 4. Save parsed issues into SQLite, automatically marking any previously stored issues that are not in the response as closed
+    save_issues(repo_id, parsed_issues, mark_unseen_as_closed=True)
 
     # 5. Fetch filtered from database to guarantee consistent sorting and label filtering
-    records = get_issues_by_repo_id(repo_id, label_filter=label_filter)
-    all_records = get_issues_by_repo_id(repo_id)
+    records = get_issues_by_repo_id(repo_id, label_filter=label_filter, state=state)
+    all_records = get_issues_by_repo_id(repo_id, state=state)
     available_labels = _extract_available_labels(all_records)
     issue_summaries = [_record_to_issue_summary(r) for r in records]
 

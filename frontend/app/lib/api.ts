@@ -341,7 +341,8 @@ export async function fetchRepoIssues(
   owner: string,
   repo: string,
   label?: string,
-  forceRefresh: boolean = false
+  forceRefresh: boolean = false,
+  state: string = "open"
 ): Promise<IssueListResponse> {
   const params = new URLSearchParams();
   if (label && label.toLowerCase() !== "all") {
@@ -349,6 +350,9 @@ export async function fetchRepoIssues(
   }
   if (forceRefresh) {
     params.set("force_refresh", "true");
+  }
+  if (state) {
+    params.set("state", state);
   }
 
   const query = params.toString() ? `?${params.toString()}` : "";
@@ -399,6 +403,8 @@ export interface DiffStats {
   line_count: number;
   files_touched: string[];
   validation_passed: boolean;
+  pre_routed?: boolean;
+  reason?: string;
 }
 
 export interface PullRequestResult {
@@ -511,6 +517,54 @@ export async function triggerAgentHandoff(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || "Failed to execute agent handoff");
+  }
+
+  return response.json();
+}
+
+/**
+ * Publishes a verified code patch as a GitHub Pull Request after developer review.
+ */
+export async function publishPullRequest(
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  data?: { diff?: string; fork_ref?: string }
+): Promise<{ status: string; action: string; pr: PullRequestResult; message: string }> {
+  const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/issues/${issueNumber}/publish-pr`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data || {}),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to publish Pull Request");
+  }
+
+  return response.json();
+}
+
+/**
+ * Discards local workspace modifications and rolls back the temporary fix branch.
+ */
+export async function rollbackHandoff(
+  owner: string,
+  repo: string,
+  issueNumber: number
+): Promise<{ status: string; repo_id: string; issue_number: number; message: string }> {
+  const response = await fetch(`${BACKEND_URL}/api/repos/${owner}/${repo}/issues/${issueNumber}/rollback`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Failed to rollback handoff changes");
   }
 
   return response.json();

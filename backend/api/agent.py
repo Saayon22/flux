@@ -24,8 +24,14 @@ from models.database import (
     get_issue_explanation,
     save_handoff_result,
     get_handoff_result,
+    delete_handoff_result,
 )
-from agent.runner import AgentRunner, run_agent_handoff
+from agent.runner import (
+    AgentRunner,
+    run_agent_handoff,
+    confirm_and_publish_pr,
+    rollback_agent_handoff,
+)
 from agent.config import DEFAULT_CHEAP_MODEL, DEFAULT_STRONGEST_MODEL
 
 router = APIRouter(tags=["agent"])
@@ -34,6 +40,12 @@ router = APIRouter(tags=["agent"])
 class HandoffRequest(BaseModel):
     opt_in: bool = Field(True, description="Human-in-the-Loop confirmation to authorize agent handoff")
     user_notes: Optional[str] = Field(None, description="Optional developer instructions or constraints for the agent")
+    auto_publish_pr: bool = Field(False, description="Automatically publish PR without pausing for developer review")
+
+
+class PublishPRRequest(BaseModel):
+    diff: Optional[str] = Field(None, description="Unified patch diff to publish")
+    fork_ref: Optional[str] = Field(None, description="Fork reference to push branch to")
 
 
 class ChatRequest(BaseModel):
@@ -161,8 +173,9 @@ async def execute_issue_handoff(
             "state": "open",
         }
 
-    # 3. Retrieve relevant files from cached explanation if present
+    # 3. Retrieve relevant files and estimated complexity from cached explanation if present
     relevant_files: List[str] = []
+    estimated_complexity: Optional[str] = None
     explanation_record = get_issue_explanation(repo_id, issue_number)
     if explanation_record:
         import json
@@ -171,6 +184,7 @@ async def execute_issue_handoff(
             relevant_files = [f["file"] for f in rfs if "file" in f]
         except Exception:
             pass
+        estimated_complexity = explanation_record.get("estimated_complexity")
 
     # 4. Resolve local directory path
     local_dir = settings.workspaces_dir / owner / repo
@@ -185,6 +199,8 @@ async def execute_issue_handoff(
         relevant_files=relevant_files,
         opt_in=req.opt_in,
         repo_path=repo_path,
+        estimated_complexity=estimated_complexity,
+        auto_publish_pr=req.auto_publish_pr,
     )
 
     # 6. Persist handoff result (PR or Plan Artifact) to SQLite
@@ -197,6 +213,69 @@ async def execute_issue_handoff(
             pass
 
     return result
+
+
+@router.post("/api/repos/{owner}/{repo}/issues/{issue_number}/publish-pr")
+async def publish_issue_pull_request(
+    owner: str,
+    repo: str,
+    issue_number: int,
+    req: Optional[PublishPRRequest] = None,
+):
+    """Publishes a verified code patch as a GitHub Pull Request after developer review."""
+    repo_id = f"{owner.lower()}/{repo.lower()}"
+    local_dir = settings.workspaces_dir / owner / repo
+    repo_path = str(local_dir) if local_dir.exists() else None
+
+    # Retrieve existing handoff record to obtain synthesized diff and fork if not in request
+    existing_record = get_handoff_result(repo_id, issue_number)
+    diff = (req.diff if req and req.diff else None) or (existing_record.get("diff") if existing_record else "")
+    fork_info = (existing_record.get("fork") if existing_record else {}) or {}
+    fork_ref = (req.fork_ref if req and req.fork_ref else None) or fork_info.get("fork_ref", f"flux-bot/{repo}")
+
+    if not diff:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No synthesized diff found to publish as Pull Request."
+        )
+
+    publish_res = confirm_and_publish_pr(
+        owner=owner,
+        repo=repo,
+        issue_number=issue_number,
+        diff=diff,
+        fork_ref=fork_ref,
+        repo_path=repo_path,
+    )
+
+    # Update SQLite record
+    if existing_record:
+        existing_record["pr"] = publish_res.get("pr")
+        existing_record["message"] = publish_res.get("message", "")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        save_handoff_result(repo_id, issue_number, existing_record, now_iso)
+
+    return publish_res
+
+
+@router.post("/api/repos/{owner}/{repo}/issues/{issue_number}/rollback")
+async def rollback_issue_handoff(owner: str, repo: str, issue_number: int):
+    """Discards local workspace changes and temporary branches for an issue handoff."""
+    repo_id = f"{owner.lower()}/{repo.lower()}"
+    local_dir = settings.workspaces_dir / owner / repo
+    repo_path = str(local_dir) if local_dir.exists() else None
+
+    res = rollback_agent_handoff(
+        owner=owner,
+        repo=repo,
+        issue_number=issue_number,
+        repo_path=repo_path,
+    )
+
+    # Delete cached handoff status in SQLite to allow fresh re-runs
+    delete_handoff_result(repo_id, issue_number)
+
+    return res
 
 
 @router.get("/api/repos/{owner}/{repo}/issues/{issue_number}/handoff")

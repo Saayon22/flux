@@ -40,9 +40,10 @@ async def list_issues_endpoint(
     repo: str,
     label: Optional[str] = Query(None, description="Optional label name to filter issues"),
     force_refresh: bool = Query(False, description="Force re-fetching from GitHub API"),
+    state: Optional[str] = Query("open", description="Filter by issue state: 'open', 'closed', or 'all'"),
 ):
     """
-    Lists open issues for a repository, optionally filtered by label.
+    Lists open issues for a repository, optionally filtered by label and state.
     Pulls from SQLite cache or fetches live from GitHub REST API.
     """
     repo_id = f"{owner.lower()}/{repo.lower()}"
@@ -59,6 +60,7 @@ async def list_issues_endpoint(
             repo=repo,
             force_refresh=force_refresh,
             label_filter=label or "",
+            state=state or "open",
         )
 
         return IssueListResponse(

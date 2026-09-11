@@ -6,6 +6,8 @@ import {
   IssueExplanation,
   AgentHandoffResponse,
   triggerAgentHandoff,
+  publishPullRequest,
+  rollbackHandoff,
   chatWithAgent,
   getHandoffResult,
 } from "../lib/api";
@@ -33,6 +35,8 @@ export default function AgentHandoffModal({
   const [optInConfirmed, setOptInConfirmed] = useState(true);
   const [userNotes, setUserNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [publishingPR, setPublishingPR] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AgentHandoffResponse | null>(null);
   const [copiedDiff, setCopiedDiff] = useState(false);
@@ -124,7 +128,9 @@ export default function AgentHandoffModal({
           ...prev,
           {
             role: "agent",
-            text: `Fix complexity exceeded single PR threshold. Generated structured Implementation Plan Artifact: "${res.plan?.title}".`,
+            text: res.diff_stats?.pre_routed
+              ? `High-complexity architectural issue detected upfront. Generated structured Implementation Plan Artifact: "${res.plan?.title}". Speculative code modifications safely bypassed.`
+              : `Fix complexity exceeded single PR threshold. Generated structured Implementation Plan Artifact: "${res.plan?.title}".`,
           },
         ]);
       }
@@ -133,6 +139,76 @@ export default function AgentHandoffModal({
       setStep("error");
       setLoading(false);
     }
+  };
+
+  const handleConfirmPublishPR = async () => {
+    if (!result?.diff) return;
+    setPublishingPR(true);
+    setError(null);
+    try {
+      const res = await publishPullRequest(owner, repo, issue.number, {
+        diff: result.diff,
+        fork_ref: result.fork?.fork_ref,
+      });
+      setResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              pr: res.pr,
+              message: res.message,
+            }
+          : null
+      );
+      setChatHistory((prev) => [
+        ...prev,
+        {
+          role: "agent",
+          text: `Pull Request successfully opened on GitHub: ${res.pr?.pr_url} (#${res.pr?.pr_number})!`,
+        },
+      ]);
+    } catch (err: any) {
+      setError(err.message || "Failed to publish Pull Request to GitHub.");
+    } finally {
+      setPublishingPR(false);
+    }
+  };
+
+  const handleDiscardRollback = async () => {
+    setRollingBack(true);
+    setError(null);
+    try {
+      await rollbackHandoff(owner, repo, issue.number);
+      setChatHistory((prev) => [
+        ...prev,
+        {
+          role: "agent",
+          text: "Workspace modifications were discarded and the temporary fix branch was reset.",
+        },
+      ]);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Failed to rollback workspace modifications.");
+    } finally {
+      setRollingBack(false);
+    }
+  };
+
+  const handleResetAndRerun = async () => {
+    setRollingBack(true);
+    setError(null);
+    try {
+      await rollbackHandoff(owner, repo, issue.number);
+    } catch {}
+    setResult(null);
+    setStep("opt_in");
+    setRollingBack(false);
+    setChatHistory((prev) => [
+      ...prev,
+      {
+        role: "agent",
+        text: "Cached handoff result was cleared. You can now re-run autonomous resolution.",
+      },
+    ]);
   };
 
   const handleCopyDiff = () => {
@@ -476,9 +552,15 @@ export default function AgentHandoffModal({
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         {result.decision === "pr" ? (
-                          <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700 flex items-center gap-1.5">
-                            <span>✓</span> Contained Fix &rarr; Pull Request Opened
-                          </span>
+                          result.pr ? (
+                            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700 flex items-center gap-1.5">
+                              <span>✓</span> Contained Fix &rarr; Pull Request Published
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-sky-950 text-sky-300 border border-sky-700 flex items-center gap-1.5">
+                              <span>🔍</span> Contained Fix &rarr; Diff Ready for Review
+                            </span>
+                          )
                         ) : (
                           <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-950 text-amber-300 border border-amber-700 flex items-center gap-1.5">
                             <span>⚠️</span> High Complexity &rarr; Implementation Plan
@@ -491,17 +573,30 @@ export default function AgentHandoffModal({
                       <p className="text-xs text-neutral-300">{result.message}</p>
                     </div>
 
-                    {result.decision === "pr" && result.pr && (
-                      <a
-                        href={result.pr.pr_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-xs transition-colors shrink-0 flex items-center gap-1.5 shadow-md shadow-emerald-950"
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleResetAndRerun}
+                        disabled={loading || publishingPR || rollingBack}
+                        className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white font-medium rounded-lg text-xs transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer border border-neutral-700 disabled:opacity-50"
+                        title="Clear cached result and re-run agent handoff"
                       >
-                        <span>View PR #{result.pr.pr_number}</span>
-                        <span>↗</span>
-                      </a>
-                    )}
+                        <span>🔄</span>
+                        <span>Re-run Handoff</span>
+                      </button>
+
+                      {result.decision === "pr" && result.pr && (
+                        <a
+                          href={result.pr.pr_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg text-xs transition-colors shrink-0 flex items-center gap-1.5 shadow-md shadow-emerald-950"
+                        >
+                          <span>View PR #{result.pr.pr_number}</span>
+                          <span>↗</span>
+                        </a>
+                      )}
+                    </div>
                   </div>
 
                   {/* Plan Artifact Display (if High Complexity) */}
@@ -516,7 +611,9 @@ export default function AgentHandoffModal({
                               Implementation Plan Artifact
                             </h5>
                             <p className="text-[11px] text-neutral-400">
-                              Diff exceeds single-PR safety bounds. Decomposed into a safe refactoring plan.
+                              {result.diff_stats?.pre_routed
+                                ? "Upfront architectural gate triggered (>4 modules / high complexity). Speculative code modification safely bypassed."
+                                : "Diff exceeds single-PR safety bounds. Decomposed into a safe refactoring plan."}
                             </p>
                           </div>
                         </div>
@@ -619,8 +716,8 @@ export default function AgentHandoffModal({
                     </div>
                   )}
 
-                  {/* Unified Diff Viewer */}
-                  {result.diff && (
+                  {/* Unified Diff Viewer (only displayed for contained PR fixes) */}
+                  {result.decision === "pr" && result.diff && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -667,17 +764,60 @@ export default function AgentHandoffModal({
                   )}
 
                   {/* Actions Footer */}
-                  <div className="flex items-center justify-between pt-3 border-t border-neutral-800 text-xs">
-                    <div className="text-neutral-500">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between pt-3 border-t border-neutral-800 text-xs gap-3">
+                    <div className="text-neutral-500 truncate">
                       Fork reference: <span className="font-mono text-neutral-400">{result.fork?.fork_ref}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="px-5 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium rounded-lg transition-colors cursor-pointer"
-                    >
-                      Done
-                    </button>
+
+                    {result.decision === "pr" && !result.pr ? (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleDiscardRollback}
+                          disabled={rollingBack || publishingPR}
+                          className="px-4 py-2 bg-red-950/40 hover:bg-red-900/60 border border-red-800/60 text-red-300 font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {rollingBack ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                              <span>Rolling back...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>✖</span>
+                              <span>Discard &amp; Rollback</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleConfirmPublishPR}
+                          disabled={publishingPR || rollingBack}
+                          className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-md shadow-emerald-950"
+                        >
+                          {publishingPR ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              <span>Publishing PR...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>🚀</span>
+                              <span>Confirm &amp; Publish PR</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-5 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium rounded-lg transition-colors cursor-pointer self-end sm:self-auto"
+                      >
+                        Done
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

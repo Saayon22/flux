@@ -313,7 +313,61 @@ def publish_pr(
     return result
 
 
+def rollback_repo(
+    repo_path: Optional[str] = None,
+    branch: Optional[str] = None,
+    tool_context: Optional[ToolContext] = None,
+) -> Dict[str, Any]:
+    """Rolls back local git modifications, resets working tree, and deletes temporary branch.
+
+    Args:
+        repo_path: Path to the local repository directory.
+        branch: The temporary fix branch name to delete (e.g. 'flux/fix-issue-10').
+        tool_context: The ADK ToolContext.
+
+    Returns:
+        Dictionary indicating status of the rollback operation.
+    """
+    logger.info("Rolling back local git modifications in %s (branch=%s)", repo_path, branch)
+    if not repo_path and tool_context and hasattr(tool_context, "state"):
+        repo_path = tool_context.state.get("repo_path")
+
+    if not repo_path or not Path(repo_path).exists():
+        return {
+            "status": "success",
+            "message": "No local repository path found or workspace does not exist; no git rollback needed.",
+        }
+
+    rpath = Path(repo_path).resolve()
+    try:
+        # Determine default branch
+        main_check = subprocess.run(["git", "checkout", "main"], cwd=rpath, capture_output=True, text=True, check=False)
+        if main_check.returncode != 0:
+            subprocess.run(["git", "checkout", "master"], cwd=rpath, capture_output=True, text=True, check=False)
+
+        # Reset all tracked changes
+        subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=rpath, capture_output=True, text=True, check=False)
+        # Remove any untracked files/directories
+        subprocess.run(["git", "clean", "-fd"], cwd=rpath, capture_output=True, text=True, check=False)
+
+        # Delete the temporary fix branch if specified
+        if branch and branch not in ("main", "master", "HEAD"):
+            subprocess.run(["git", "branch", "-D", branch], cwd=rpath, capture_output=True, text=True, check=False)
+
+        logger.info("Cleaned workspace and checked out default branch successfully.")
+        return {
+            "status": "success",
+            "message": "Workspace successfully reset and changes discarded.",
+        }
+    except Exception as e:
+        logger.warning("Rollback git command warning: %s", e)
+        return {
+            "status": "partial_success",
+            "message": f"Rollback completed with notice: {e}",
+        }
+
 
 fetch_issue_tool = FunctionTool(func=fetch_issue)
 fork_repo_tool = LongRunningFunctionTool(func=fork_repo)
 publish_pr_tool = FunctionTool(func=publish_pr)
+rollback_repo_tool = FunctionTool(func=rollback_repo)

@@ -371,12 +371,35 @@ def get_understanding_by_repo_id(repo_id: str) -> Optional[Dict[str, Any]]:
         return dict(row) if row else None
 
 
-def save_issues(repo_id: str, issues: List[Dict[str, Any]]) -> None:
+def save_issues(
+    repo_id: str,
+    issues: List[Dict[str, Any]],
+    mark_unseen_as_closed: bool = False
+) -> None:
     """
     Inserts or updates a list of GitHub issues for a repository in SQLite.
+    When mark_unseen_as_closed is True, any existing issues for this repository
+    not present in the provided list are marked as 'closed'.
     """
     with get_db() as conn:
         cursor = conn.cursor()
+        current_numbers = [int(issue["number"]) for issue in issues if "number" in issue]
+
+        if mark_unseen_as_closed and current_numbers:
+            placeholders = ",".join("?" for _ in current_numbers)
+            cursor.execute(f"""
+                UPDATE repository_issues
+                SET state = 'closed'
+                WHERE LOWER(repo_id) = LOWER(?)
+                AND issue_number NOT IN ({placeholders})
+            """, [repo_id.lower()] + current_numbers)
+        elif mark_unseen_as_closed and not current_numbers:
+            cursor.execute("""
+                UPDATE repository_issues
+                SET state = 'closed'
+                WHERE LOWER(repo_id) = LOWER(?)
+            """, (repo_id.lower(),))
+
         for issue in issues:
             issue_id = f"{repo_id.lower()}#{issue['number']}"
             cursor.execute("""
@@ -396,6 +419,7 @@ def save_issues(repo_id: str, issues: List[Dict[str, Any]]) -> None:
                     author=excluded.author,
                     labels_json=excluded.labels_json,
                     comments_count=excluded.comments_count,
+                    github_url=excluded.github_url,
                     updated_at=excluded.updated_at
             """, {
                 "id": issue_id,
@@ -413,24 +437,32 @@ def save_issues(repo_id: str, issues: List[Dict[str, Any]]) -> None:
             })
 
 
-def get_issues_by_repo_id(repo_id: str, label_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_issues_by_repo_id(
+    repo_id: str,
+    label_filter: Optional[str] = None,
+    state: Optional[str] = "open"
+) -> List[Dict[str, Any]]:
     """
-    Retrieves stored GitHub issues for a repository, optionally filtered by label.
+    Retrieves stored GitHub issues for a repository, optionally filtered by state and label.
+    Defaults to returning only 'open' issues.
     """
     with get_db() as conn:
         cursor = conn.cursor()
+        query = "SELECT * FROM repository_issues WHERE LOWER(repo_id) = LOWER(?)"
+        params: List[Any] = [repo_id]
+
+        if state and state.strip().lower() != "all":
+            query += " AND LOWER(state) = LOWER(?)"
+            params.append(state.strip())
+
         if label_filter and label_filter.strip().lower() != "all":
             # Filter by label within JSON text
             pattern = f'%"{label_filter.strip()}"%'
-            cursor.execute(
-                "SELECT * FROM repository_issues WHERE LOWER(repo_id) = LOWER(?) AND labels_json LIKE ? ORDER BY issue_number DESC",
-                (repo_id, pattern)
-            )
-        else:
-            cursor.execute(
-                "SELECT * FROM repository_issues WHERE LOWER(repo_id) = LOWER(?) ORDER BY issue_number DESC",
-                (repo_id,)
-            )
+            query += " AND labels_json LIKE ?"
+            params.append(pattern)
+
+        query += " ORDER BY issue_number DESC"
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         return [dict(r) for r in rows]
 
@@ -513,6 +545,12 @@ def save_handoff_result(
     pr_info = result_data.get("pr") or {}
     plan_info = result_data.get("plan")
 
+    pr_url = pr_info.get("pr_url") if isinstance(pr_info, dict) else None
+    if pr_url and ("/pull/" not in pr_url):
+        pr_url = None
+    pr_number = pr_info.get("pr_number") if (pr_url and isinstance(pr_info, dict)) else None
+    branch = pr_info.get("branch") if (pr_url and isinstance(pr_info, dict)) else None
+
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -544,9 +582,9 @@ def save_handoff_result(
             "decision": result_data.get("decision", "pr"),
             "fork_ref": fork_info.get("fork_ref"),
             "fork_url": fork_info.get("fork_url"),
-            "pr_url": pr_info.get("pr_url") if pr_info else None,
-            "pr_number": pr_info.get("pr_number") if pr_info else None,
-            "branch": pr_info.get("branch") if pr_info else None,
+            "pr_url": pr_url,
+            "pr_number": pr_number,
+            "branch": branch,
             "diff": result_data.get("diff", ""),
             "diff_stats_json": json.dumps(result_data.get("diff_stats") or {}),
             "plan_json": json.dumps(plan_info) if plan_info else None,
@@ -554,6 +592,16 @@ def save_handoff_result(
             "created_at": now_iso,
             "updated_at": now_iso,
         })
+
+
+def delete_handoff_result(repo_id: str, issue_number: int) -> None:
+    """
+    Deletes the cached agent handoff record for an issue in SQLite.
+    """
+    handoff_id = f"{repo_id.lower()}#{issue_number}"
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM handoff_results WHERE id = ?", (handoff_id,))
 
 
 def get_handoff_result(repo_id: str, issue_number: int) -> Optional[Dict[str, Any]]:
@@ -587,11 +635,12 @@ def get_handoff_result(repo_id: str, issue_number: int) -> Optional[Dict[str, An
                 plan_info = None
 
         pr_info = None
-        if row_dict.get("pr_url"):
+        pr_url = row_dict.get("pr_url")
+        if pr_url and "/pull/" in pr_url:
             pr_info = {
                 "status": "success",
                 "action": "pull_request_opened",
-                "pr_url": row_dict["pr_url"],
+                "pr_url": pr_url,
                 "pr_number": row_dict["pr_number"] or 1,
                 "branch": row_dict["branch"] or f"flux/fix-issue-{issue_number}",
                 "fork_ref": row_dict["fork_ref"] or "",

@@ -64,14 +64,23 @@ export default function IssueExplorer({
       setLoadingIssues(true);
       setIssuesError(null);
       try {
-        const data = await fetchRepoIssues(owner, repo, selectedLabel, forceRefresh);
-        setIssues(data.issues);
+        const data = await fetchRepoIssues(owner, repo, selectedLabel, forceRefresh, "open");
+        const openIssues = (data.issues || []).filter(
+          (i) => !i.state || i.state.toLowerCase() === "open"
+        );
+        setIssues(openIssues);
         if (data.available_labels && data.available_labels.length > 0) {
           setAvailableLabels(data.available_labels);
         }
-        // Auto-select first issue if none selected
-        if (data.issues.length > 0 && !selectedIssue) {
-          setSelectedIssue(data.issues[0]);
+        // Auto-select first open issue if none selected or if selected issue is now closed
+        if (openIssues.length > 0) {
+          setSelectedIssue((prev) =>
+            prev && openIssues.some((i) => i.number === prev.number)
+              ? prev
+              : openIssues[0]
+          );
+        } else {
+          setSelectedIssue(null);
         }
       } catch (err: any) {
         setIssuesError(err.message || "Failed to load GitHub issues.");
@@ -79,12 +88,12 @@ export default function IssueExplorer({
         setLoadingIssues(false);
       }
     },
-    [owner, repo, selectedLabel, selectedIssue]
+    [owner, repo, selectedLabel]
   );
 
   useEffect(() => {
     loadIssues();
-  }, [selectedLabel]);
+  }, [selectedLabel, owner, repo]);
 
   // When selected issue changes, fetch or generate its explanation on-demand
   useEffect(() => {
@@ -116,11 +125,14 @@ export default function IssueExplorer({
     };
   }, [owner, repo, selectedIssue]);
 
-  // Client-side search filtering
+  // Client-side search filtering (strictly open issues only)
   const filteredIssues = useMemo(() => {
-    if (!searchQuery.trim()) return issues;
+    const openOnly = issues.filter(
+      (i) => !i.state || i.state.toLowerCase() === "open"
+    );
+    if (!searchQuery.trim()) return openOnly;
     const q = searchQuery.toLowerCase();
-    return issues.filter(
+    return openOnly.filter(
       (i) =>
         i.title.toLowerCase().includes(q) ||
         (i.body && i.body.toLowerCase().includes(q)) ||

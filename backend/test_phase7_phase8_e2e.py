@@ -21,7 +21,16 @@ import pytest
 import httpx
 from main import app
 from models.database import init_db, save_handoff_result, get_handoff_result
-from agent.workflow.complexity_router import evaluate_diff_complexity, generate_plan_artifact
+from agent.workflow.complexity_router import (
+    evaluate_diff_complexity,
+    evaluate_issue_pre_routing,
+    generate_plan_artifact,
+)
+from agent.runner import (
+    run_agent_handoff,
+    confirm_and_publish_pr,
+    rollback_agent_handoff,
+)
 from agent.config import MAX_DIFF_LINES_FOR_PR, MAX_FILES_TOUCHED_FOR_PR
 
 
@@ -80,6 +89,89 @@ def test_phase7_complexity_routing_branches():
     decision_plan_files = evaluate_diff_complexity(diff_stats=broad_stats)
     assert decision_plan_files == "plan", f"Expected 'plan' route for wide diff, got: {decision_plan_files}"
     print(f"[PASS] Phase 7 Complexity Router -> 'plan' branch verified ({len(broad_stats['files_touched'])} files)")
+
+
+def test_phase7_upfront_complexity_gate_pre_routing():
+    """Verifies that evaluate_issue_pre_routing catches high complexity issues before code generation."""
+    # Case A: Too many affected files (> 4 files)
+    res_files = evaluate_issue_pre_routing(
+        issue_data={"title": "Update styles", "body": "Small CSS update"},
+        relevant_files=["a.py", "b.py", "c.py", "d.py", "e.py"],
+    )
+    assert res_files == "plan", f"Expected 'plan' for 5 files, got: {res_files}"
+
+    # Case B: High estimated complexity
+    res_complexity = evaluate_issue_pre_routing(
+        issue_data={"title": "Fix auth", "body": "Auth overhaul"},
+        relevant_files=["src/auth.py"],
+        estimated_complexity="High",
+    )
+    assert res_complexity == "plan", f"Expected 'plan' for High complexity, got: {res_complexity}"
+
+    # Case C: Architectural refactoring keyword in title
+    res_title = evaluate_issue_pre_routing(
+        issue_data={"title": "refactor(rag): architect multi-tenant course isolation and vector database migration"},
+        relevant_files=["backend/rag_engine.py", "backend/db.py"],
+    )
+    assert res_title == "plan", f"Expected 'plan' for architectural refactoring title, got: {res_title}"
+
+    # Case D: Refactoring keyword in labels
+    res_label = evaluate_issue_pre_routing(
+        issue_data={"title": "Improve speed", "labels": [{"name": "refactoring"}]},
+        relevant_files=["backend/speed.py"],
+    )
+    assert res_label == "plan", f"Expected 'plan' for refactoring label, got: {res_label}"
+
+    # Case E: Contained, small bug fix (eligible for autonomous code generation & PR)
+    res_small = evaluate_issue_pre_routing(
+        issue_data={"title": "fix: correct typo on login button label", "labels": ["bug"]},
+        relevant_files=["frontend/LoginButton.tsx"],
+        estimated_complexity="Low",
+    )
+    assert res_small is None, f"Expected None (proceed to code generation) for small fix, got: {res_small}"
+
+    print("[PASS] Upfront Complexity Gate pre-routing unit tests verified")
+
+
+@pytest.mark.asyncio
+async def test_phase7_run_agent_handoff_bypasses_code_synthesis_for_refactor():
+    """Verifies that run_agent_handoff bypasses code synthesis when upfront gate triggers."""
+    target_issue = {
+        "title": "refactor(rag): architect multi-tenant course isolation and vector database migration",
+        "body": "Decompose RAG engine into multi-tenant course partitions with vector DB migration.",
+        "state": "open",
+    }
+    relevant_files = [
+        "backend/rag_engine.py",
+        "backend/db.py",
+        "backend/main.py",
+        "frontend-react/src/pages/TeacherPortal.jsx",
+        "frontend-react/src/pages/StudentPortal.jsx",
+    ]
+
+    result = await run_agent_handoff(
+        owner="Roxy-06",
+        repo="Eduzen",
+        issue_number=11,
+        issue_data=target_issue,
+        relevant_files=relevant_files,
+        opt_in=True,
+        estimated_complexity="High",
+    )
+
+    assert result["status"] == "success"
+    assert result["authorized"] is True
+    assert result["decision"] == "plan"
+    assert result["diff"] == "", f"Diff should be empty when pre-routed to plan, got: {result['diff'][:100]}"
+    assert result["diff_stats"]["pre_routed"] is True
+    assert result["diff_stats"]["line_count"] == 0
+    assert result["pr"] is None
+    assert result["plan"] is not None
+    assert result["plan"]["estimated_risk"] == "High"
+    assert len(result["plan"]["affected_modules"]) == 5
+    assert "Upfront Architectural Scope Gate" in result["plan"]["markdown_content"]
+
+    print("[PASS] run_agent_handoff upfront bypass test passed: routed instantly to Plan Artifact")
 
 
 def test_phase7_plan_artifact_rich_generation():
@@ -191,6 +283,78 @@ async def test_phase8_live_demo_rehearsal_flow():
             print("[PASS] Demo Issue Seeded for 0-issue repository")
         else:
             print(f"[PASS] Found {len(issues)} issues for demo repository")
+
+
+@pytest.mark.asyncio
+async def test_phase7_two_step_diff_review_and_manual_pr_publish():
+    """Verifies that run_agent_handoff pauses at Diff Review and publishes PR only upon confirmation."""
+    init_db()
+    owner = "octocat"
+    repo = "Hello-World"
+    issue_number = 99
+    target_issue = {
+        "title": "fix: correct typo in README",
+        "body": "Small typo on the landing page description.",
+        "state": "open",
+    }
+    relevant_files = ["README.md"]
+
+    # 1. First stage: handoff with auto_publish_pr=False
+    result = await run_agent_handoff(
+        owner=owner,
+        repo=repo,
+        issue_number=issue_number,
+        issue_data=target_issue,
+        relevant_files=relevant_files,
+        opt_in=True,
+        auto_publish_pr=False,
+    )
+
+    assert result["status"] == "success"
+    assert result["decision"] == "pr"
+    assert result["diff"] is not None and len(result["diff"]) > 0
+    assert result["pr"] is None, "PR should be None before developer confirmation"
+    assert "Review the generated diff below and confirm" in result["message"]
+    print("[PASS] Diff Review stage verified: diff generated, PR deferred")
+
+    # Persist the pending handoff result
+    now_iso = datetime.now(timezone.utc).isoformat()
+    save_handoff_result(f"{owner}/{repo}", issue_number, result, now_iso)
+
+    # 2. Second stage: explicit confirm and publish PR via API
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        pub_res = await client.post(
+            f"/api/repos/{owner}/{repo}/issues/{issue_number}/publish-pr",
+            json={"diff": result["diff"], "fork_ref": result["fork"]["fork_ref"]},
+        )
+        assert pub_res.status_code == 200, f"Publish PR failed: {pub_res.text}"
+        pub_data = pub_res.json()
+        assert pub_data["status"] == "success"
+        assert pub_data["action"] == "pull_request_published"
+        assert "pr" in pub_data and pub_data["pr"]["pr_url"] is not None
+        print(f"[PASS] Manual PR publication confirmed: {pub_data['pr']['pr_url']}")
+
+        # Verify SQLite cache updated with published PR
+        cached = get_handoff_result(f"{owner}/{repo}", issue_number)
+        assert cached is not None
+        assert cached["pr"] is not None
+        print("[PASS] SQLite updated with confirmed PR details")
+
+
+@pytest.mark.asyncio
+async def test_phase7_rollback_endpoint():
+    """Verifies that rollback endpoint discards local changes and updates SQLite."""
+    init_db()
+    owner = "octocat"
+    repo = "Hello-World"
+    issue_number = 101
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        rb_res = await client.post(f"/api/repos/{owner}/{repo}/issues/{issue_number}/rollback")
+        assert rb_res.status_code == 200, f"Rollback failed: {rb_res.text}"
+        rb_data = rb_res.json()
+        assert rb_data["status"] == "rolled_back"
+        print("[PASS] Rollback endpoint verified")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 ## flux
 
-Follow `flux_PRD.md`, `flux_Tech_Stack.md`, and `flux_Phase_Build_Plan.md`.
+Follow `flux_PRD.md`.
 
 * Keep the implementation simple and hackathon-scale.
 * Stack: Next.js + TypeScript, FastAPI + Python, Tree-sitter, NetworkX, React Flow, Google ADK (Agent Development Kit), Google Gemini API (`google-genai`), GitHub API, SQLite.
@@ -13,4 +13,5 @@ Follow `flux_PRD.md`, `flux_Tech_Stack.md`, and `flux_Phase_Build_Plan.md`.
 * Keep cloned repositories in `workspaces/`.
 * Require Human-in-the-Loop opt-in before executing autonomous code handoff.
 * Avoid unnecessary dependencies and infrastructure.
-* Prioritize the MVP and working end-to-end demo.
+
+
