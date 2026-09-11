@@ -1,7 +1,5 @@
 """Configuration for flux Google ADK Agent System.
-
-Integrated and enhanced from Hackrit'26.
-Defines model routing, thresholds, fallbacks, and execution parameters.
+Defines model routing, thresholds, and execution parameters.
 """
 
 import os
@@ -28,15 +26,15 @@ except Exception:
     _conf_gemini_key = ""
     _conf_model = ""
 
-# Google Gemini model routing
+# Google Gemini model routing from environment only
 GEMINI_API_KEY = _conf_gemini_key or os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY and "GEMINI_API_KEY" not in os.environ:
     os.environ["GEMINI_API_KEY"] = GEMINI_API_KEY
 
-DEFAULT_CHEAP_MODEL = _conf_model or os.getenv("REPORAMP_CHEAP_MODEL", os.getenv("GEMINI_MODEL", "gemini-3.6-flash"))
-DEFAULT_STRONGEST_MODEL = _conf_model or os.getenv("REPORAMP_STRONG_MODEL", os.getenv("GEMINI_MODEL", "gemini-3.6-flash"))
+DEFAULT_CHEAP_MODEL = _conf_model or os.getenv("GEMINI_MODEL", "")
+DEFAULT_STRONGEST_MODEL = _conf_model or os.getenv("GEMINI_MODEL", "")
 
-# Complexity Router thresholds for PR vs Plan Artifact (per flux PRD)
+# Complexity Router thresholds for PR vs Plan Artifact (per PRD)
 MAX_DIFF_LINES_FOR_PR = int(os.getenv("MAX_DIFF_LINES_FOR_PR", "150"))
 MAX_FILES_TOUCHED_FOR_PR = int(os.getenv("MAX_FILES_TOUCHED_FOR_PR", "4"))
 
@@ -47,11 +45,11 @@ if GITHUB_TOKEN and "GITHUB_TOKEN" not in os.environ:
 
 # OpenCode headless configuration
 OPENCODE_CLI_CMD = os.getenv("OPENCODE_CLI_CMD", "opencode")
-OPENCODE_MODEL = os.getenv("OPENCODE_MODEL", "google/gemini-3.6-flash")
+OPENCODE_MODEL = os.getenv("OPENCODE_MODEL", os.getenv("GEMINI_MODEL", ""))
 OPENCODE_TIMEOUT = int(os.getenv("OPENCODE_TIMEOUT", "120"))
 
-# Demo mode & resiliency settings
-DEMO_MODE = os.getenv("REPORAMP_DEMO_MODE", "false").lower() in ("true", "1", "yes")
+# Resiliency settings
+DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() in ("true", "1", "yes")
 
 # Known-good cached fallback diff for live-demo reliability
 FALLBACK_DEMO_DIFF = """--- a/src/handler.py

@@ -1,4 +1,4 @@
-# Backend dependencies for flux (Phase 1, 2, 3)
+# Backend dependencies for flux
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 pydantic>=2.7.0
@@ -8,6 +8,8 @@ python-dotenv>=1.0.1
 tree-sitter>=0.22.0
 tree-sitter-python>=0.23.0
 tree-sitter-javascript>=0.23.0
+tree-sitter-go>=0.25.0
+tree-sitter-rust>=0.24.0
 networkx>=3.3
 google-genai>=0.1.1
 google-adk>=0.2.0

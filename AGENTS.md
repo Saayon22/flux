@@ -4,8 +4,8 @@
 
 Follow `flux_PRD.md`.
 
-* Keep the implementation simple and hackathon-scale.
-* Stack: Next.js + TypeScript, FastAPI + Python, Tree-sitter, NetworkX, React Flow, Google ADK (Agent Development Kit), Google Gemini API (`google-genai`), GitHub API, SQLite.
+* Keep the implementation simple, focused, and robust.
+* Stack: Next.js + TypeScript, FastAPI + Python, Tree-sitter (Python, JS/TS, Go, Rust), NetworkX, Google ADK (Agent Development Kit), Google Gemini API (`google-genai`), GitHub API, SQLite.
 * Preserve the flow: **Repo → Graph → Understanding → Issue → Agent → PR/Plan**.
 * Use Tree-sitter + NetworkX for grounded repository analysis.
 * Use Google ADK multi-agent framework (`flux_root` coordinator, `summarizer_agent`, `issue_explainer_agent`, `orchestrator_agent`).

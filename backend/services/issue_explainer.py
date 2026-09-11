@@ -48,9 +48,8 @@ def _generate_grounded_fallback(
     issue_number: int,
     now_iso: str
 ) -> IssueExplanation:
-    """
-    Synthesizes a grounded deterministic issue explanation from issue text
-    and graph metrics. Guarantees 100% uptime for hackathon demo resilience.
+    """Synthesizes a grounded deterministic issue explanation from issue text
+    and graph metrics.
     """
     title = issue_data.get("title", f"Issue #{issue_number}")
     body = issue_data.get("body") or "No description provided."

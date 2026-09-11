@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # Google Gemini / ADK configuration
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.6-flash"
+    gemini_model: str = ""
 
     @property
     def effective_api_key(self) -> str:
@@ -27,9 +27,9 @@ class Settings(BaseSettings):
 
     @property
     def effective_model(self) -> str:
-        """Returns effective Gemini model."""
+        """Returns effective Gemini model resolved strictly from environment."""
         import os
-        return self.gemini_model or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+        return self.gemini_model or os.getenv("GEMINI_MODEL", "")
 
     # Absolute path to the workspaces directory where repositories will be cloned
     workspaces_dir: Path = Path(__file__).resolve().parent.parent / "workspaces"

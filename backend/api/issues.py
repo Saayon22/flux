@@ -191,8 +191,8 @@ async def explain_issue_endpoint(owner: str, repo: str, issue_number: int):
 @router.post("/{owner}/{repo}/issues/seed", response_model=IssueSummary)
 async def seed_demo_issue_endpoint(owner: str, repo: str):
     """
-    Seeds a realistic demo issue for repositories that currently have 0 open GitHub issues.
-    Enables testing and rehearsing the live end-to-end issue explanation and handoff demo.
+    Seeds a sample issue for repositories that currently have 0 open GitHub issues.
+    Useful for local development and workflow verification.
     """
     repo_id = f"{owner.lower()}/{repo.lower()}"
     repo_record = get_repository_by_id(repo_id)

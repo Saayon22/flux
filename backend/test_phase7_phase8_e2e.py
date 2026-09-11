@@ -1,11 +1,11 @@
-"""End-to-End Test Suite for Phase 7 (Complexity Routing & PR) and Phase 8 (Integration & Demo Hardening).
+"""End-to-End Test Suite for Complexity Routing, PR Publishing, SQLite Persistence, and Full Workflow.
 
 Verifies:
-1. Phase 8: System Status & GitHub Rate Limit discovery endpoint (/api/agent/status)
-2. Phase 7: Deterministic Complexity Router (Contained Diff -> 'pr' branch vs Complex Diff -> 'plan' branch)
-3. Phase 7: SQLite Persistence & Retrieval for PR and Plan Artifacts (/api/repos/{owner}/{repo}/issues/{issue}/handoff)
-4. Phase 7: Markdown Plan Artifact generation & downloadable structure
-5. Phase 8: Live demo rehearsal & end-to-end multi-agent execution pipeline
+1. System Status & GitHub Rate Limit discovery endpoint (/api/agent/status)
+2. Deterministic Complexity Router (Contained Diff -> 'pr' branch vs Complex Diff -> 'plan' branch)
+3. SQLite Persistence & Retrieval for PR and Plan Artifacts (/api/repos/{owner}/{repo}/issues/{issue}/handoff)
+4. Markdown Plan Artifact generation & downloadable structure
+5. End-to-end repository ingestion, graph generation, and multi-agent execution pipeline
 """
 
 import asyncio
@@ -250,8 +250,8 @@ async def test_phase7_sqlite_persistence_and_api_retrieval():
 
 
 @pytest.mark.asyncio
-async def test_phase8_live_demo_rehearsal_flow():
-    """Verifies 1-click live demo flow on octocat/Hello-World."""
+async def test_e2e_full_repository_flow():
+    """Verifies end-to-end repository ingestion, graph generation, and issue discovery."""
     init_db()
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         # Ingest demo repository

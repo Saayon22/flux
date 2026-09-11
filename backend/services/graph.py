@@ -76,13 +76,43 @@ def resolve_import_to_file(
         # Try various JS/TS extensions
         for ext in [".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/index.js"]:
             candidate = resolved_path + ext
-            # Normalize path (resolve '..' components)
             try:
                 norm = Path(candidate).as_posix()
                 if norm in known_files:
                     return norm
             except Exception:
                 continue
+
+    # 4. Go package and module resolution
+    # Matches internal package imports (e.g. "myproject/pkg/util" or "./util")
+    go_base = cleaned.split("/")[-1]
+    for kf in known_files:
+        if kf.endswith(".go"):
+            kf_dir = Path(kf).parent.name
+            if kf_dir == go_base or kf == f"{cleaned}.go":
+                return kf
+
+    # 5. Rust module and crate resolution
+    # Handles: `mod::config`, `crate::service::Engine`, `super::util`, `use service::...`
+    rust_cleaned = cleaned.replace("mod::", "").replace("crate::", "").replace("super::", "").replace("self::", "")
+    rust_parts = rust_cleaned.split("::")
+    if rust_parts:
+        r_mod = rust_parts[0]
+        source_dir = Path(source_file).parent.as_posix()
+
+        candidates = [
+            f"{r_mod}.rs",
+            f"{r_mod}/mod.rs",
+            f"src/{r_mod}.rs",
+            f"src/{r_mod}/mod.rs",
+        ]
+        if source_dir and source_dir != ".":
+            candidates.insert(0, f"{source_dir}/{r_mod}.rs")
+            candidates.insert(1, f"{source_dir}/{r_mod}/mod.rs")
+
+        for cand in candidates:
+            if cand in known_files:
+                return cand
 
     return None
 

@@ -59,11 +59,8 @@ app.include_router(agent_router)
 
 @app.get("/api/health", tags=["system"])
 async def health_check():
-    """
-    Health check endpoint returning system status and current phase indicator.
-    """
+    """Health check endpoint returning system status."""
     return {
         "status": "healthy",
         "app": "flux",
-        "phase": "Phase 1 - Repository Ingestion",
     }

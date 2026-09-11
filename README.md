@@ -42,7 +42,7 @@ Deterministic Complexity Router
 | **Frontend** | [Next.js 16](https://nextjs.org/) + [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) |
 | **Styling** | [Tailwind CSS 4](https://tailwindcss.com/) |
 | **Backend** | [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/) (Python 3.12) |
-| **AST Parsing** | [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) (Python & JavaScript/TypeScript grammars) |
+| **AST Parsing** | [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) (Python, JavaScript/TypeScript, Go, and Rust grammars) |
 | **Dependency Graph** | [NetworkX](https://networkx.org/) (in-degree, out-degree, Louvain community clusters) |
 | **Agent Framework** | [Google ADK](https://pypi.org/project/google-adk/) (`google-adk` 2.9.0) |
 | **Language Model & SDK** | [Google Gemini](https://ai.google.dev/) (`gemini-3.6-flash` via `google-genai` SDK) |
@@ -206,7 +206,7 @@ Run all 17 automated test suites against the backend:
 Or run individual integration test modules:
 
 ```bash
-# Phase 7 & 8 End-to-End Suite (Complexity Routing, SQLite, Rate Limit & Demo Rehearsal):
+# End-to-End Integration Suite (Complexity Routing, SQLite, Rate Limit & Handoff):
 .\backend\.venv\Scripts\python.exe backend/test_phase7_phase8_e2e.py
 
 # Agent Status, Opt-In Gate, Handoff & Chat:
@@ -230,32 +230,26 @@ Or run individual integration test modules:
 
 ---
 
-## Live Demo Rehearsal Guide
-
-flux is engineered for zero-touch, seamless live hackathon demonstrations:
+## Workflow & Usage Guide
 
 1. **System Health Status Bar**:
-   - Check the top header for live status of **Gemini 3.6 Flash**, **Google ADK Multi-Agent Framework**, and authenticated **GitHub API Rate Limit** ($5{,}000\text{ req/hr}$).
+   - Check the top header for live status of **Google Gemini**, **Google ADK Multi-Agent Framework**, and authenticated **GitHub API Rate Limit** ($5{,}000\text{ req/hr}$).
 
-2. **1-Click Live Rehearsal Pills**:
-   - Click `Roxy-06/Eduzen` (Dual-portal AI university system with Python FastAPI backend and React frontend) or `octocat/Hello-World`.
-   - The input automatically populates and kicks off the 1-click end-to-end pipeline.
+2. **Repository Ingestion & Full Analysis**:
+   - Enter any public repository URL (e.g. `pallets/flask`, `octocat/Hello-World`) to ingest and parse source ASTs into a NetworkX dependency graph.
+   - Run grounded architecture understanding with Gemini.
 
-3. **1-Click Full Analysis Auto-Pipeline**:
-   - Hit **⚡ 1-Click Full Analysis** to execute:
-     `Ingestion` $\to$ `Tree-sitter AST & NetworkX Graph` $\to$ `Gemini Architecture Understanding` sequentially with real-time stepper indicators.
-
-4. **Issue Triage & Google ADK Handoff**:
-   - Select an issue from the discovered issue cards.
-   - Click **🚀 Handoff to Google ADK Agent**.
+3. **Issue Triage & Google ADK Handoff**:
+   - Select an issue from the repository issue list.
+   - Click **Handoff to Google ADK Agent**.
    - Review the Human-in-the-Loop opt-in gate and click **Authorize & Execute Handoff**.
 
-5. **Deterministic Complexity Routing**:
+4. **Deterministic Complexity Routing**:
    - **Contained fixes ($\le 150$ lines, $\le 4$ files)**: Automatically checks out a local branch, applies the patch, pushes to the authenticated fork, and opens an upstream GitHub Pull Request.
-   - **High-complexity fixes ($> 150$ lines or broad modules)**: Generates a structured **Implementation Plan Artifact** with an interactive **📥 Download Plan (.md)** button, affected AST modules, refactoring steps, and QA checklist.
+   - **High-complexity fixes ($> 150$ lines or broad modules)**: Generates a structured **Implementation Plan Artifact** with an interactive **Download Plan (.md)** button, affected AST modules, refactoring steps, and QA checklist.
 
 ---
 
 ## License
 
-MIT License. Built for hackathon and open-source contribution acceleration.
+MIT License. Built for open-source contribution acceleration.

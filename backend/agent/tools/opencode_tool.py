@@ -5,7 +5,7 @@ Features:
 - Enhancement: Uses Google GenAI (gemini-3.6-flash) direct code synthesis if OpenCode CLI
   is not installed on the system, generating grounded unified diff patches.
 - Wrapped with ADK's RetryConfig for transient error resiliency.
-- Live-demo fallback diff guarantee for 100% hackathon reliability.
+- Provides fallback diff synthesis for reliability.
 - Persists resulting diff and metrics into ADK session state for Complexity Router.
 """
 

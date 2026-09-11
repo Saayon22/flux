@@ -17,18 +17,17 @@ flux takes a GitHub URL, builds a grounded understanding of the repo (via static
 
 ## 4. Scope
 
-**MVP (demo-critical):**
+**Core Capabilities:**
 - Full pipeline works end-to-end on real, arbitrary public repos, including the fork flow (fork → poll until ready → push → cross-repo PR).
-- AST parsing + dependency graph for at least one major language (e.g. Python, JS/TS).
+- AST parsing + dependency graph for major languages (Python, JavaScript/TypeScript, Go, Rust).
 - Google Gemini repo summary + issue explanation, grounded in the graph.
 - Google ADK Autonomous Agent handoff with code patch synthesis producing a real diff.
 - Complexity-routing fallback (plan artifact vs. PR).
 - Lazy forking: no fork is created on URL paste; fork happens only when a user requests agent handoff on a specific issue.
 - Issue explanations generated on-demand (only when a user opens a specific issue), not upfront for every filtered issue.
-- One clean, pre-tested happy-path repo/issue combo rehearsed for the live demo, even though the system is built to handle arbitrary repos.
 
-**Stretch (post-MVP):**
-- Multi-language AST support beyond the first language.
+**Stretch:**
+- Multi-language AST extensions.
 - Session resumption / iterating on a rejected PR.
 - Multi-provider model selection exposed to the user.
 - Test-running the agent's diff before opening the PR.
@@ -60,14 +59,13 @@ flux takes a GitHub URL, builds a grounded understanding of the repo (via static
 ## 7. Key Risks & Mitigations
 - **Agent fix quality varies by issue complexity** (inherent, not solvable by us) → Complexity Router falls back to a plan artifact instead of a broken/oversized PR.
 - **Fork provisioning race condition** (GitHub forks are async) → poll/retry before pushing to the fork.
-- **Google ADK/Gemini call failures during live demo** → cache a known-good fallback result for the rehearsed demo repo/issue.
-- **Graph parsing failing on unusual repo structures** → scope MVP language support to what's reliably testable before demo day.
+- **Google ADK/Gemini call failures** → robust error handling with fallback diagnostics.
+- **Graph parsing failing on unusual repo structures** → robust AST query fallback handlers.
 
-## 8. Success Criteria (Demo)
-- Live: paste a real public repo URL → see grounded summary + dependency graph.
-- Live: pick a real issue → see plain-English explanation + analogy.
-- Live: opt into handoff → see a real PR opened on a forked repo (or a plan artifact if complexity routing triggers).
-- At least one rehearsed run completes with zero manual intervention.
+## 8. Success Criteria
+- Paste a real public repo URL → see grounded summary + dependency graph.
+- Pick a real issue → see plain-English explanation + analogy.
+- Opt into handoff → see a real PR opened on a forked repo (or a plan artifact if complexity routing triggers).
 
 ## 9. Out of Scope
 - Guaranteeing correctness of agent-generated fixes.

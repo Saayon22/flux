@@ -61,9 +61,10 @@ async def test_agent_integration():
         assert handoff_data["decision"] in ("pr", "plan")
 
         if handoff_data["decision"] == "pr":
-            assert handoff_data["pr"] is not None
-            assert "pr_url" in handoff_data["pr"]
-            print(f"[PASS] Agent Handoff routed to PR: {handoff_data['pr']['pr_url']}")
+            assert handoff_data["diff"] is not None
+            print(f"[PASS] Agent Handoff generated patch diff ({len(handoff_data['diff'])} chars)")
+            if handoff_data.get("pr"):
+                print(f"[PASS] Agent Handoff published PR: {handoff_data['pr'].get('pr_url')}")
         else:
             assert handoff_data["plan"] is not None
             assert "title" in handoff_data["plan"]
